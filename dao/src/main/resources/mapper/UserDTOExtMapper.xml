@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.pocrd.api_publish_service.dao.mapper.UserDTOExtMapper">
+
+    <!-- 批量插入用户 -->
+    <insert id="batchInsert">
+        INSERT INTO test_user (username, email, phone, status, created_at, updated_at)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.username}, #{item.email}, #{item.phone}, #{item.status}, NOW(), NOW())
+        </foreach>
+    </insert>
+
+    <!-- 根据用户名模糊查询 -->
+    <select id="selectByUsernameLike" resultType="com.pocrd.api_publish_service.dao.autogen.entity.UserDTO">
+        SELECT * FROM test_user
+        WHERE username LIKE CONCAT('%', #{username}, '%')
+        AND status = 1
+    </select>
+
+    <!-- 根据状态查询用户列表 -->
+    <select id="selectByStatus" resultType="com.pocrd.api_publish_service.dao.autogen.entity.UserDTO">
+        SELECT * FROM test_user WHERE status = #{status}
+    </select>
+
+    <!-- 批量更新状态 -->
+    <update id="batchUpdateStatus">
+        UPDATE test_user
+        SET status = #{status}, updated_at = NOW()
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <!-- 逻辑删除 -->
+    <update id="logicDeleteById">
+        UPDATE test_user
+        SET status = 0, updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- 批量逻辑删除 -->
+    <update id="batchLogicDelete">
+        UPDATE test_user
+        SET status = 0, updated_at = NOW()
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+</mapper>

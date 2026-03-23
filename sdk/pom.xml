@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.pocrd</groupId>
+        <artifactId>api-publish-service</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>api-publish-service-sdk</artifactId>
+    <packaging>jar</packaging>
+
+    <name>API Publish Service SDK</name>
+    <description>API metadata annotations for marking service interfaces, methods, parameters, entities and fields</description>
+
+    <dependencies>
+        <!-- 注解处理器依赖（可选，用于编译时处理） -->
+        <dependency>
+            <groupId>org.apache.dubbo</groupId>
+            <artifactId>dubbo</artifactId>
+            <version>${dubbo.version}</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- 注解模块不需要 main 类 -->
+                    <proc>none</proc>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<generator-config>
+    <!-- 数据库连接配置 -->
+    <database>
+        <url>jdbc:mysql://localhost:3306/api_publish_service?useUnicode=true&amp;characterEncoding=utf-8&amp;useSSL=false&amp;serverTimezone=Asia/Shanghai</url>
+        <username>root</username>
+        <password>root123</password>
+        <driver>com.mysql.cj.jdbc.Driver</driver>
+    </database>
+
+    <!-- 代码生成配置 -->
+    <generator>
+        <basePackage>com.pocrd.api_publish_service.dao.autogen</basePackage>
+    </generator>
+
+    <!-- 表与实体映射配置 -->
+    <tables>
+        <table tableName="test_user" domainObjectName="UserDTO"/>
+        <table tableName="test_order" domainObjectName="OrderDTO"/>
+        <table tableName="test_product" domainObjectName="ProductDTO"/>
+    </tables>
+</generator-config>

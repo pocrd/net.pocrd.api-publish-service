@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE configuration
+        PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-config.dtd">
+<configuration>
+    
+    <!-- 设置 -->
+    <settings>
+        <setting name="mapUnderscoreToCamelCase" value="true"/>
+        <setting name="defaultExecutorType" value="SIMPLE"/>
+        <setting name="cacheEnabled" value="false"/>
+    </settings>
+    
+    <!-- 类型别名 -->
+    <typeAliases>
+        <package name="com.pocrd.api_publish_service.dao.autogen.entity"/>
+    </typeAliases>
+    
+    <!-- 环境配置 -->
+    <environments default="test">
+        <environment id="test">
+            <transactionManager type="JDBC"/>
+            <dataSource type="POOLED">
+                <property name="driver" value="com.mysql.cj.jdbc.Driver"/>
+                <property name="url" value="jdbc:mysql://localhost:3306/api_publish_service?useUnicode=true&amp;characterEncoding=utf-8&amp;useSSL=false&amp;serverTimezone=Asia/Shanghai&amp;allowPublicKeyRetrieval=true"/>
+                <property name="username" value="root"/>
+                <property name="password" value="root123"/>
+            </dataSource>
+        </environment>
+    </environments>
+    
+    <!-- Mapper 映射文件 -->
+    <mappers>
+        <!-- 自动生成的 Mapper -->
+        <mapper resource="autogen/mapper/UserDTOMapper.xml"/>
+        <mapper resource="autogen/mapper/OrderDTOMapper.xml"/>
+        <mapper resource="autogen/mapper/ProductDTOMapper.xml"/>
+        <!-- 扩展的 Mapper -->
+        <mapper resource="mapper/UserDTOExtMapper.xml"/>
+        <mapper resource="mapper/OrderDTOExtMapper.xml"/>
+        <mapper resource="mapper/ProductDTOExtMapper.xml"/>
+    </mappers>
+    
+</configuration>
