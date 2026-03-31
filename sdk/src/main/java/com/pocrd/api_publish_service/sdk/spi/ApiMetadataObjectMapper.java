@@ -266,27 +266,6 @@ public class ApiMetadataObjectMapper {
     }
     
     /**
-     * Entities Map 自定义序列化器
-     * 专门用于处理 entities 字段的 Map，将 key 从全限定名转换为简化名
-     */
-    private static class EntitiesMapSerializer extends JsonSerializer<Map<String, Object>> {
-        @Override
-        public void serialize(Map<String, Object> value, JsonGenerator gen, SerializerProvider serializers) 
-                throws IOException {
-            gen.writeStartObject();
-            for (Map.Entry<String, Object> entry : value.entrySet()) {
-                String key = entry.getKey();
-                // 将全限定名转换为简化名
-                String simplifiedKey = ApiMetadataValidator.simplifyType(key);
-                serializers.defaultSerializeValue(simplifiedKey, gen);
-                gen.writeFieldName(simplifiedKey);
-                serializers.defaultSerializeValue(entry.getValue(), gen);
-            }
-            gen.writeEndObject();
-        }
-    }
-    
-    /**
      * 写入 enumDef 字段（EnumNull 视为 null，否则展开为 enumValues 数组）
      */
     private static void writeEnumDef(String enumDef, JsonGenerator gen) throws IOException {

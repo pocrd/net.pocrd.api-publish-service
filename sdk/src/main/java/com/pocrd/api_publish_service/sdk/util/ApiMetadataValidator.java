@@ -393,41 +393,57 @@ public class ApiMetadataValidator {
     }
 
     /**
-     * 检查类型
+     * 检查类型（基础类型和实体类型，不检查容器类型）
      */
     private void checkType(Class<?> type, Set<Class<?>> entityTypes, String interfaceName, 
                           String methodName, String paramName) {
-        if (type == null || type.isPrimitive()) {
+        if (type == null) {
+            addError(interfaceName, methodName, paramName, null, null,
+                ValidationError.ErrorType.UNSUPPORTED_TYPE, "类型为 null");
             return;
         }
 
         String typeName = type.getName();
 
-        // 基础类型白名单
         if (TYPE_WHITELIST.contains(typeName)) {
             return;
         }
 
-        // 容器类型白名单
-        if (CONTAINER_WHITELIST.contains(typeName)) {
-            return;
-        }
+        // 注意：容器类型白名单不在此处检查，应在调用方处理泛型时检查
 
-        // 数组类型
+        // 数组类型 - 递归检查元素类型
         if (type.isArray()) {
             checkType(type.getComponentType(), entityTypes, interfaceName, methodName, paramName);
             return;
         }
 
-        // 其他类型视为实体（包括不在白名单中的JDK类型，统一按实体规范检查）
+        // 其他类型视为实体（包括不在白名单中的JDK类型和基本类型，统一按实体规范检查）
         entityTypes.add(type);
     }
 
     /**
-     * 检查泛型参数类型
+     * 检查泛型参数类型（递归处理嵌套泛型）
      */
     private void checkTypeArgument(java.lang.reflect.Type typeArg, Set<Class<?>> entityTypes,
                                     String interfaceName, String methodName, String paramName) {
+        // 处理嵌套泛型类型（如 List<List<String>> 中的 List<String>）
+        if (typeArg instanceof java.lang.reflect.ParameterizedType nestedParamType) {
+            Class<?> rawType = (Class<?>) nestedParamType.getRawType();
+            // 禁止嵌套容器类型（即使是白名单中的容器类型也不允许嵌套）
+            addError(interfaceName, methodName, paramName, null, null,
+                ValidationError.ErrorType.UNSUPPORTED_CONTAINER,
+                "不支持的嵌套容器类型: " + rawType.getName() + "，容器类型不支持嵌套使用");
+            return;
+        }
+        
+        // 处理泛型类型变量（如 <T>）
+        if (typeArg instanceof java.lang.reflect.TypeVariable) {
+            addError(interfaceName, methodName, paramName, null, null,
+                ValidationError.ErrorType.UNSUPPORTED_TYPE,
+                "不支持的泛型类型变量: " + typeArg.getTypeName() + "，请使用具体类型");
+            return;
+        }
+        
         String typeName = typeArg.getTypeName();
         
         // 基础类型
@@ -491,18 +507,18 @@ public class ApiMetadataValidator {
                                                     Set<Class<?>> processedTypes, String interfaceName) {
         String entityName = entityType.getName();
 
-        // 检查是否为record类型
-        if (!entityType.isRecord()) {
-            addError(interfaceName, null, null, entityName, null,
-                ValidationError.ErrorType.NON_RECORD_ENTITY, "实体类必须使用record类型定义");
-            return null;
-        }
-
-        // 检查 @Description
+        // 先检查 @Description - 如果没有 @Description，说明不是自定义实体类型
         Description classDesc = entityType.getAnnotation(Description.class);
         if (classDesc == null) {
             addError(interfaceName, null, null, entityName, null,
-                ValidationError.ErrorType.MISSING_DESCRIPTION, "实体类必须标记 @Description 注解");
+                ValidationError.ErrorType.MISSING_DESCRIPTION, "类型缺少 @Description 注解，不是有效的自定义类型");
+            return null;
+        }
+
+        // 只有带 @Description 的自定义类型才需要是 record
+        if (!entityType.isRecord()) {
+            addError(interfaceName, null, null, entityName, null,
+                ValidationError.ErrorType.NON_RECORD_ENTITY, "实体类必须使用record类型定义");
             return null;
         }
 
