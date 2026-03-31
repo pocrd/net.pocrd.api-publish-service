@@ -273,6 +273,11 @@ public class ApiMetadataValidator {
                     checkTypeArgument(typeArguments[0], entityTypes, interfaceName, methodName, null);
                 }
             }
+        } else if (genericReturnType instanceof java.lang.reflect.TypeVariable) {
+            // 泛型类型变量（如 <T> T）
+            addError(interfaceName, methodName, null, null, null,
+                ValidationError.ErrorType.UNSUPPORTED_TYPE,
+                "不支持的泛型返回类型: " + genericReturnType.getTypeName() + "，请使用具体类型");
         } else {
             checkType(returnType, entityTypes, interfaceName, methodName, null);
         }
@@ -345,9 +350,9 @@ public class ApiMetadataValidator {
                 }
             }
         }
-        // 处理数组
+        // 处理数组（统一标记为list）
         else if (paramType.isArray()) {
-            containerType = "array";
+            containerType = "list";
             Class<?> compType = paramType.getComponentType();
             type = compType.getName();
             checkType(compType, entityTypes, interfaceName, methodName, paramName);
@@ -414,15 +419,7 @@ public class ApiMetadataValidator {
             return;
         }
 
-        // JDK 内部类型（不支持）
-        if (typeName.startsWith("java.lang.") || typeName.startsWith("java.io.") || typeName.startsWith("java.time.")) {
-            addError(interfaceName, methodName, paramName, null, null,
-                ValidationError.ErrorType.UNSUPPORTED_TYPE,
-                "不支持的 JDK 类型: " + typeName + "，请使用白名单中的类型或自定义实体类");
-            return;
-        }
-
-        // 其他类型视为实体
+        // 其他类型视为实体（包括不在白名单中的JDK类型，统一按实体规范检查）
         entityTypes.add(type);
     }
 
@@ -494,6 +491,13 @@ public class ApiMetadataValidator {
                                                     Set<Class<?>> processedTypes, String interfaceName) {
         String entityName = entityType.getName();
 
+        // 检查是否为record类型
+        if (!entityType.isRecord()) {
+            addError(interfaceName, null, null, entityName, null,
+                ValidationError.ErrorType.NON_RECORD_ENTITY, "实体类必须使用record类型定义");
+            return null;
+        }
+
         // 检查 @Description
         Description classDesc = entityType.getAnnotation(Description.class);
         if (classDesc == null) {
@@ -512,9 +516,9 @@ public class ApiMetadataValidator {
             String type = fieldType.getName();
             String containerType = null;
 
-            // 处理数组
+            // 处理数组（统一标记为list）
             if (fieldType.isArray()) {
-                containerType = "array";
+                containerType = "list";
                 Class<?> compType = fieldType.getComponentType();
                 type = compType.getName();
                 if (isEntityType(compType) && !processedTypes.contains(compType)) {
@@ -642,7 +646,7 @@ public class ApiMetadataValidator {
         if (TYPE_MAPPING.containsKey(typeName)) {
             return TYPE_MAPPING.get(typeName);
         }
-        if ("StreamObserver".equals(typeName) || "array".equals(typeName)) {
+        if ("StreamObserver".equals(typeName) || "list".equals(typeName)) {
             return typeName;
         }
         String simpleName = typeName.substring(typeName.lastIndexOf('.') + 1);

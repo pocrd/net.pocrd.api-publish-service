@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -73,12 +72,10 @@ public class JavaClientCodeGeneratorTest {
             List.of(new ParameterDefinition(
                 "name",
                 "java.lang.String",
-                false,
+                null,
                 true,
                 null,
                 null,
-                null,
-                false,
                 "User name",
                 "John",
                 null,
@@ -86,27 +83,30 @@ public class JavaClientCodeGeneratorTest {
             ))
         );
         
+        // 创建实体定义
+        FieldDefinition field1 = new FieldDefinition("id", "java.lang.Long", null, "ID", null);
+        FieldDefinition field2 = new FieldDefinition("name", "java.lang.String", null, "Name", null);
+        EntityDefinition entity = new EntityDefinition(
+            "com.pocrd.api_publish_service.api.entity.ApiInfo",
+            "ApiInfo entity",
+            true,
+            List.of(field1, field2)
+        );
+        
         // 创建服务定义
         ServiceDefinition service = new ServiceDefinition(
             "com.pocrd.api_publish_service.api.GreeterService",
             null,
             "Greeter Service",
-            List.of(greetMethod)
-        );
-        
-        // 创建实体定义
-        FieldDefinition field1 = new FieldDefinition("id", "java.lang.Long", false, null, "ID", null);
-        FieldDefinition field2 = new FieldDefinition("name", "java.lang.String", false, null, "Name", null);
-        EntityDefinition entity = new EntityDefinition(
-            "com.pocrd.api_publish_service.api.entity.ApiInfo",
-            true,
-            List.of(field1, field2)
+            List.of(greetMethod),
+            java.util.Map.of("com.pocrd.api_publish_service.api.entity.ApiInfo", entity),
+            null,
+            null,
+            null
         );
         
         return new ApiMetadata(
-            List.of(service),
-            Map.of("com.pocrd.api_publish_service.api.entity.ApiInfo", entity),
-            null
+            List.of(service)
         );
     }
     

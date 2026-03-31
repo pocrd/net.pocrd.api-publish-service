@@ -27,6 +27,8 @@ public record ValidationError(
         UNSUPPORTED_TYPE("不支持的类型"),
         UNSUPPORTED_CONTAINER("不支持的容器类型"),
         ENTITY_NAME_CONFLICT("实体类名冲突"),
+        NON_RECORD_ENTITY("实体类必须使用record类型"),
+        INVALID_CODE_DEFINE("codeDefine必须继承AbstractReturnCode"),
         OTHER("其他错误");
         
         private final String description;

@@ -2,6 +2,9 @@ package com.pocrd.api_publish_service.service.impl;
 
 import com.pocrd.api_publish_service.api.ValidApiTestService;
 import com.pocrd.api_publish_service.api.entity.AddressInfo;
+import com.pocrd.api_publish_service.api.entity.CircularEntityA;
+import com.pocrd.api_publish_service.api.entity.CircularEntityB;
+import com.pocrd.api_publish_service.api.entity.EnumFieldEntity;
 import com.pocrd.api_publish_service.api.entity.OrderInfo;
 import com.pocrd.api_publish_service.api.entity.OrderItem;
 import com.pocrd.api_publish_service.api.entity.UserInfo;
@@ -9,8 +12,9 @@ import org.apache.dubbo.common.stream.StreamObserver;
 import org.apache.dubbo.config.annotation.DubboService;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
-import java.util.regex.Pattern;
+import java.util.Set;
 
 /**
  * ValidApiTestService 实现类
@@ -206,6 +210,68 @@ public class ValidApiTestServiceImpl implements ValidApiTestService {
     public void testVoidReturn(String action) {
         // 执行操作但不返回结果
         System.out.println("Executing action: " + action);
+    }
+
+    // ==================== 新增测试场景实现 ====================
+
+    @Override
+    public String testEnumParam(String status) {
+        return "Order status: " + status;
+    }
+
+    @Override
+    public Set<String> testSetParam(Set<String> tags) {
+        Set<String> result = new HashSet<>();
+        for (String tag : tags) {
+            result.add("[" + tag + "]");
+        }
+        return result;
+    }
+
+    @Override
+    public Set<UserInfo> testSetEntityReturn(List<Long> userIds) {
+        Set<UserInfo> users = new HashSet<>();
+        for (Long userId : userIds) {
+            users.add(createSampleUser(userId.intValue()));
+        }
+        return users;
+    }
+
+    @Override
+    public CircularEntityA testCircularEntity(CircularEntityB entityB) {
+        // 返回一个包含entityB引用的CircularEntityA
+        List<CircularEntityB> list = new ArrayList<>();
+        list.add(entityB);
+        return new CircularEntityA(1L, "EntityA", list);
+    }
+
+    @Override
+    public void testStreamObserverComplex(long orderId, StreamObserver<OrderInfo> observer) {
+        try {
+            // 模拟流式推送订单信息
+            for (int i = 1; i <= 3; i++) {
+                OrderInfo order = createSampleOrder((int) orderId + i, "SHIPPED");
+                observer.onNext(order);
+                Thread.sleep(200);
+            }
+            observer.onCompleted();
+        } catch (Exception e) {
+            observer.onError(e);
+        }
+    }
+
+    @Override
+    public Integer testWrapperReturn(int value) {
+        return value * 2;
+    }
+
+    @Override
+    public EnumFieldEntity testEnumFieldEntity(EnumFieldEntity entity) {
+        return new EnumFieldEntity(
+                entity.orderId(),
+                entity.status() + "_processed",
+                entity.amount()
+        );
     }
 
     // ==================== 辅助方法 ====================

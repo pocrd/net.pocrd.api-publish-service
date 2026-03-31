@@ -1,13 +1,15 @@
 package com.pocrd.api_publish_service.service.impl;
 
 import com.pocrd.api_publish_service.api.InvalidApiTestService;
-import com.pocrd.api_publish_service.api.UndescribedEntity;
-import com.pocrd.api_publish_service.api.PartialDescribedEntity;
-import com.pocrd.api_publish_service.api.PageResult;
+import com.pocrd.api_publish_service.api.entity.NonRecordEntity;
 import com.pocrd.api_publish_service.api.entity.OrderInfo;
+import com.pocrd.api_publish_service.api.entity.PageResult;
+import com.pocrd.api_publish_service.api.entity.PartialDescribedEntity;
+import com.pocrd.api_publish_service.api.entity.UndescribedEntity;
 import com.pocrd.api_publish_service.api.entity.UserInfo;
 import org.apache.dubbo.config.annotation.DubboService;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -60,9 +62,8 @@ public class InvalidApiTestServiceImpl implements InvalidApiTestService {
 
     @Override
     public PageResult<UserInfo> returnGenericContainer(int pageNum) {
-        PageResult<UserInfo> result = new PageResult<>();
-        // 模拟填充数据
-        return result;
+        // PageResult是record类型，但这里故意返回null因为这是个错误测试场景
+        return null;
     }
 
     @Override
@@ -109,5 +110,32 @@ public class InvalidApiTestServiceImpl implements InvalidApiTestService {
     @Override
     public String multipleErrors(String param1, LocalDateTime param2) {
         return String.format("Multiple errors: %s, %s", param1, param2);
+    }
+
+    // ==================== 新增错误场景实现 ====================
+
+    @Override
+    public NonRecordEntity testNonRecordEntity(NonRecordEntity entity) {
+        return entity;
+    }
+
+    @Override
+    public String testNestedGeneric(List<List<String>> nestedList) {
+        return "Nested list received";
+    }
+
+    @Override
+    public String testByteArray(byte[] data) {
+        return "Byte array received: " + data.length + " bytes";
+    }
+
+    @Override
+    public <T> T testGenericReturn(Object value) {
+        return (T) value;
+    }
+
+    @Override
+    public String testBigDecimal(BigDecimal amount) {
+        return "Amount: " + amount.toString();
     }
 }

@@ -3,13 +3,19 @@ package com.pocrd.api_publish_service.api;
 import com.pocrd.api_publish_service.api.constant.TestServiceReturnCode;
 import static com.pocrd.api_publish_service.api.constant.TestServiceReturnCode.INVALID_PARAMETER_CODE;
 import com.pocrd.api_publish_service.api.entity.OrderInfo;
+import com.pocrd.api_publish_service.api.entity.PageResult;
+import com.pocrd.api_publish_service.api.entity.PartialDescribedEntity;
+import com.pocrd.api_publish_service.api.entity.UndescribedEntity;
 import com.pocrd.api_publish_service.api.entity.UserInfo;
+import com.pocrd.api_publish_service.api.entity.NonRecordEntity;
 import com.pocrd.api_publish_service.sdk.annotation.ApiGroup;
 import com.pocrd.api_publish_service.sdk.annotation.ApiParameter;
 import com.pocrd.api_publish_service.sdk.annotation.Description;
 import com.pocrd.api_publish_service.sdk.annotation.DesignedErrorCode;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -25,6 +31,9 @@ import java.util.Map;
  *   <li>错误码未在 @ApiGroup 中定义</li>
  *   <li>实体类缺少 @Description 注解</li>
  *   <li>实体字段缺少 @Description 注解</li>
+ *   <li>实体类不是record类型</li>
+ *   <li>多层嵌套泛型</li>
+ *   <li>泛型返回类型</li>
  * </ul>
  *
  * <p><strong>注意：</strong>此接口故意包含错误，用于测试SDK的错误检测能力。</p>
@@ -176,6 +185,52 @@ public interface InvalidApiTestService {
     String multipleErrors(
         String param1,  // 缺少@ApiParameter
         @ApiParameter(name = "param2", required = true, desc = "参数2") LocalDateTime param2  // 不支持的类型
+    );
+
+    // ==================== 新增错误场景 ====================
+
+    /**
+     * 非record类型实体测试
+     */
+    @Description("非record类型实体测试")
+    @DesignedErrorCode({INVALID_PARAMETER_CODE})
+    NonRecordEntity testNonRecordEntity(
+        @ApiParameter(name = "entity", required = true, desc = "非record实体") NonRecordEntity entity
+    );
+
+    /**
+     * 多层嵌套泛型测试
+     */
+    @Description("多层嵌套泛型测试")
+    @DesignedErrorCode({INVALID_PARAMETER_CODE})
+    String testNestedGeneric(
+        @ApiParameter(name = "nestedList", required = true, desc = "嵌套列表") List<List<String>> nestedList
+    );
+
+    /**
+     * byte[]数组测试
+     */
+    @Description("byte数组测试")
+    @DesignedErrorCode({INVALID_PARAMETER_CODE})
+    String testByteArray(
+        @ApiParameter(name = "data", required = true, desc = "字节数据") byte[] data
+    );
+
+    /**
+     * 泛型返回类型测试
+     */
+    @Description("泛型返回类型测试")
+    <T> T testGenericReturn(
+        @ApiParameter(name = "value", required = true, desc = "输入值") Object value
+    );
+
+    /**
+     * BigDecimal类型测试（不支持的JDK类型）
+     */
+    @Description("BigDecimal类型测试")
+    @DesignedErrorCode({INVALID_PARAMETER_CODE})
+    String testBigDecimal(
+        @ApiParameter(name = "amount", required = true, desc = "金额") BigDecimal amount
     );
 }
 

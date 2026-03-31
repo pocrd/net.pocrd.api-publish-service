@@ -2,7 +2,7 @@ package com.pocrd.api_publish_service.sdk.annotation;
 
 import java.lang.annotation.*;
 
-@Target({ ElementType.FIELD })
+@Target({ ElementType.FIELD, ElementType.PARAMETER })
 @Retention(RetentionPolicy.RUNTIME)
 public @interface EnumDef {
     /**

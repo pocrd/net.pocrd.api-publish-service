@@ -1,11 +1,15 @@
 package com.pocrd.api_publish_service.api;
 
+import com.pocrd.api_publish_service.api.constant.OrderStatusEnum;
 import com.pocrd.api_publish_service.api.constant.TestServiceReturnCode;
 import static com.pocrd.api_publish_service.api.constant.TestServiceReturnCode.INVALID_PARAMETER_CODE;
 import static com.pocrd.api_publish_service.api.constant.TestServiceReturnCode.RESOURCE_NOT_FOUND_CODE;
 import static com.pocrd.api_publish_service.api.constant.TestServiceReturnCode.OPERATION_FAILED_CODE;
 import static com.pocrd.api_publish_service.api.constant.TestServiceReturnCode.VALIDATION_ERROR_CODE;
 import com.pocrd.api_publish_service.api.entity.AddressInfo;
+import com.pocrd.api_publish_service.api.entity.CircularEntityA;
+import com.pocrd.api_publish_service.api.entity.CircularEntityB;
+import com.pocrd.api_publish_service.api.entity.EnumFieldEntity;
 import com.pocrd.api_publish_service.api.entity.OrderInfo;
 import com.pocrd.api_publish_service.api.entity.OrderItem;
 
@@ -14,9 +18,11 @@ import com.pocrd.api_publish_service.sdk.annotation.ApiGroup;
 import com.pocrd.api_publish_service.sdk.annotation.ApiParameter;
 import com.pocrd.api_publish_service.sdk.annotation.Description;
 import com.pocrd.api_publish_service.sdk.annotation.DesignedErrorCode;
+import com.pocrd.api_publish_service.sdk.annotation.EnumDef;
 import org.apache.dubbo.common.stream.StreamObserver;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * 有效API测试服务接口
@@ -25,13 +31,15 @@ import java.util.List;
  * <p>包含以下测试场景：</p>
  * <ul>
  *   <li>基本类型参数（String, int, long, boolean）</li>
- *   <li>集合类型参数（List, 数组）</li>
- *   <li>实体类型参数（单层、嵌套）</li>
+ *   <li>集合类型参数（List, Set, 数组）</li>
+ *   <li>实体类型参数（单层、嵌套、循环依赖）</li>
  *   <li>多种返回类型（基本类型、实体、集合、分页）</li>
  *   <li>流式接口（StreamObserver）</li>
  *   <li>可选参数（required=false）</li>
  *   <li>参数验证（verifyRegex）</li>
  *   <li>错误码声明（@DesignedErrorCode）</li>
+ *   <li>枚举参数（@EnumDef）</li>
+ *   <li>包装类返回（Integer, Long, Boolean）</li>
  * </ul>
  */
 @ApiGroup(
@@ -234,5 +242,69 @@ public interface ValidApiTestService {
     @DesignedErrorCode({OPERATION_FAILED_CODE})
     void testVoidReturn(
         @ApiParameter(name = "action", required = true, desc = "操作类型") String action
+    );
+
+    // ==================== 新增测试场景 ====================
+
+    /**
+     * 枚举参数测试
+     */
+    @Description("枚举参数测试")
+    @DesignedErrorCode({INVALID_PARAMETER_CODE})
+    String testEnumParam(
+        @ApiParameter(name = "status", required = true, desc = "订单状态") @EnumDef(OrderStatusEnum.class) String status
+    );
+
+    /**
+     * Set参数测试
+     */
+    @Description("Set参数测试")
+    @DesignedErrorCode({INVALID_PARAMETER_CODE})
+    Set<String> testSetParam(
+        @ApiParameter(name = "tags", required = true, desc = "标签集合") Set<String> tags
+    );
+
+    /**
+     * Set实体类型返回测试
+     */
+    @Description("Set实体类型返回测试")
+    Set<UserInfo> testSetEntityReturn(
+        @ApiParameter(name = "userIds", required = true, desc = "用户ID列表") List<Long> userIds
+    );
+
+    /**
+     * 循环依赖实体测试
+     */
+    @Description("循环依赖实体测试")
+    @DesignedErrorCode({INVALID_PARAMETER_CODE})
+    CircularEntityA testCircularEntity(
+        @ApiParameter(name = "entityB", required = true, desc = "循环依赖实体B") CircularEntityB entityB
+    );
+
+    /**
+     * StreamObserver返回复杂实体测试
+     */
+    @Description("StreamObserver返回复杂实体测试")
+    @DesignedErrorCode({RESOURCE_NOT_FOUND_CODE})
+    void testStreamObserverComplex(
+        @ApiParameter(name = "orderId", required = true, desc = "订单ID") long orderId,
+        @ApiParameter(name = "observer", required = true, desc = "流式响应观察者") StreamObserver<OrderInfo> observer
+    );
+
+    /**
+     * 包装类返回测试
+     */
+    @Description("包装类返回测试")
+    Integer testWrapperReturn(
+        @ApiParameter(name = "value", required = true, desc = "输入值") int value
+    );
+
+    /**
+     * 字段级枚举实体测试
+     */
+    @Description("字段级枚举实体测试")
+    @DesignedErrorCode({INVALID_PARAMETER_CODE})
+    EnumFieldEntity testEnumFieldEntity(
+        @ApiParameter(name = "entity", required = true, desc = "枚举字段实体") EnumFieldEntity entity
     );
 }
