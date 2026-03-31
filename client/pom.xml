@@ -17,11 +17,6 @@
     <name>API Publish Service Client</name>
     <description>API Publish Service Integration Test Client</description>
 
-    <!-- 默认属性 -->
-    <properties>
-        <dubbo.url>dubbo://localhost:50052?serialization=fury</dubbo.url>
-    </properties>
-
     <dependencyManagement>
         <dependencies>
             <!-- Spring Boot BOM - 用于统一管理日志等依赖版本 -->

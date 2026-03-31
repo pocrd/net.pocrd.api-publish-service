@@ -17,8 +17,8 @@
         <module>sdk</module>
         <module>api</module>
         <module>service</module>
-        <module>dao</module>
         <module>client</module>
+        <module>codegen</module>
     </modules>
 
     <properties>

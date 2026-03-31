@@ -38,6 +38,9 @@ cd "$SCRIPT_DIR"
 SERVICE_NAME="api-publish-service"
 COMPOSE_FILE="docker-compose.yml"
 
+# 强制模式标志（跳过 API 检查）
+FORCE_MODE=false
+
 # 打印信息
 info() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -76,11 +79,73 @@ check_env() {
     success "环境检查通过"
 }
 
+# 检查 API 元数据
+api_check() {
+    info "检查 API 元数据..."
+    
+    # 查找 api 模块的 jar 文件（使用 SERVICE_NAME 拼接，排除 sources 和 javadoc）
+    API_JAR_PATTERN="api/target/${SERVICE_NAME}-api-*.jar"
+    API_JAR=$(ls $API_JAR_PATTERN 2>/dev/null | grep -v "sources" | grep -v "javadoc" | head -1)
+    
+    if [ -z "$API_JAR" ] || [ ! -f "$API_JAR" ]; then
+        error "API jar 文件不存在: $API_JAR_PATTERN"
+        error "请先执行 ./deploy.sh build 进行编译"
+        exit 1
+    fi
+    
+    info "使用 API jar: $(basename $API_JAR)"
+    
+    # 查找 SDK jar - 从 service 的 lib 目录中查找（作为依赖引入）
+    SDK_JAR_PATTERN="service/target/lib/${SERVICE_NAME}-sdk-*.jar"
+    SDK_JAR=$(ls $SDK_JAR_PATTERN 2>/dev/null | head -1)
+    
+    if [ -z "$SDK_JAR" ] || [ ! -f "$SDK_JAR" ]; then
+        error "SDK jar 文件不存在: $SDK_JAR_PATTERN"
+        error "请确保 service 模块已正确编译，SDK 作为依赖被复制到 lib 目录"
+        exit 1
+    fi
+    
+    info "使用 SDK jar: $(basename $SDK_JAR)"
+    
+    # 运行 ApiMetadataValidator 检查
+    info "运行 ApiMetadataValidator 检查 API 接口..."
+    
+    # 构建 classpath（SDK jar + API jar + service 的所有依赖）
+    CP="$SDK_JAR:$API_JAR"
+    
+    # 添加 service 的所有依赖
+    if [ -d "service/target/lib" ]; then
+        for lib in service/target/lib/*.jar; do
+            if [ -f "$lib" ]; then
+                CP="$CP:$lib"
+            fi
+        done
+    fi
+    
+    # 执行检查
+    if ! API_PUBLISH_SERVICE_NAME="$SERVICE_NAME" java -cp "$CP" com.pocrd.api_publish_service.sdk.util.ApiMetadataValidator "$API_JAR"; then
+        if [ "$FORCE_MODE" = true ]; then
+            warn "API 元数据检查失败，但强制模式已启用，继续部署..."
+        else
+            error "API 元数据检查失败，请修复上述问题后再部署"
+            exit 1
+        fi
+    else
+        success "API 元数据检查通过"
+    fi
+}
+
 # 本地编译
 build() {
     info "开始 Maven 编译打包..."
-    mvn clean package -pl service -am -DskipTests -B
+    # 先清理所有模块，确保 SDK 修改被正确编译
+    mvn clean -B -Dmaven.clean.failOnError=false
+    # 构建 service 模块及其依赖
+    mvn package -pl service -am -DskipTests -B
     success "编译完成"
+    
+    # 编译完成后检查 API 元数据
+    api_check
 }
 
 # 构建 Docker 镜像
@@ -159,10 +224,14 @@ usage() {
     echo "Dubbo 微服务部署脚本"
     echo ""
     echo "Usage:"
-    echo "  ./deploy.sh [command]"
+    echo "  ./deploy.sh [options] [command]"
+    echo ""
+    echo "Options:"
+    echo "  -force      强制模式，跳过 API 元数据检查"
     echo ""
     echo "Commands:"
     echo "  build       本地 Maven 编译打包"
+    echo "  api-check   检查 API 元数据（自动在 build 后执行）"
     echo "  docker      构建 Docker 镜像"
     echo "  up          启动服务"
     echo "  down        停止服务"
@@ -174,16 +243,53 @@ usage() {
     echo "  help        显示使用说明"
     echo ""
     echo "Examples:"
-    echo "  ./deploy.sh deploy      # 首次完整部署"
-    echo "  ./deploy.sh restart     # 修改代码后重启"
-    echo "  ./deploy.sh logs        # 查看运行日志"
+    echo "  ./deploy.sh deploy              # 首次完整部署"
+    echo "  ./deploy.sh -force deploy       # 强制部署（跳过 API 检查）"
+    echo "  ./deploy.sh restart             # 修改代码后重启"
+    echo "  ./deploy.sh logs                # 查看运行日志"
+}
+
+# 解析参数
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -force)
+                FORCE_MODE=true
+                shift
+                ;;
+            build|api-check|docker|up|down|restart|logs|status|deploy|clean|help|--help|-h)
+                COMMAND="$1"
+                shift
+                ;;
+            *)
+                error "未知参数: $1"
+                usage
+                exit 1
+                ;;
+        esac
+    done
 }
 
 # 主逻辑
-case "${1:-deploy}" in
+COMMAND="${1:-deploy}"
+
+# 如果第一个参数是 -force，需要特殊处理
+if [ "$1" = "-force" ]; then
+    FORCE_MODE=true
+    COMMAND="${2:-deploy}"
+fi
+
+# 解析所有参数（支持 -force 在任意位置）
+parse_args "$@"
+
+case "$COMMAND" in
     build)
         check_env
         build
+        ;;
+    api-check)
+        check_env
+        api_check
         ;;
     docker)
         check_env
@@ -207,7 +313,12 @@ case "${1:-deploy}" in
         status
         ;;
     deploy)
-        deploy
+        check_env
+        info "开始完整部署流程..."
+        build
+        docker_build
+        up
+        success "部署完成！"
         ;;
     clean)
         clean
@@ -216,7 +327,7 @@ case "${1:-deploy}" in
         usage
         ;;
     *)
-        error "未知命令: $1"
+        error "未知命令: $COMMAND"
         usage
         exit 1
         ;;

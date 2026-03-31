@@ -1,8 +1,8 @@
 package com.pocrd.api_publish_service.service.impl;
 
 import com.pocrd.api_publish_service.api.GreeterServiceInternal;
+import com.pocrd.api_publish_service.api.entity.ApiInfo;
 import com.pocrd.api_publish_service.api.entity.ServiceInfo;
-import org.apache.dubbo.common.stream.StreamObserver;
 import org.apache.dubbo.config.annotation.DubboService;
 import org.apache.dubbo.rpc.RpcContext;
 
@@ -29,8 +29,8 @@ public class GreeterServiceInternalImpl implements GreeterServiceInternal {
     public String greetInternal(String name) {
         incrementRequestCount();
         
-        String remoteAddress = RpcContext.getContext().getRemoteAddressString();
-        String localAddress = RpcContext.getContext().getLocalAddressString();
+        String remoteAddress = RpcContext.getServerContext().getRemoteAddressString();
+        String localAddress = RpcContext.getServerContext().getLocalAddressString();
         
         return String.format("[Internal] Hello %s, from %s (to %s)", 
                 name, remoteAddress, localAddress);
@@ -42,7 +42,7 @@ public class GreeterServiceInternalImpl implements GreeterServiceInternal {
         
         return names.stream()
                 .map(name -> {
-                    String remoteAddress = RpcContext.getContext().getRemoteAddressString();
+                    String remoteAddress = RpcContext.getServerContext().getRemoteAddressString();
                     return String.format("[Internal Batch] Hello %s, from %s", name, remoteAddress);
                 })
                 .collect(Collectors.toList());
@@ -71,7 +71,12 @@ public class GreeterServiceInternalImpl implements GreeterServiceInternal {
             "GreeterServiceInternal",
             "1.0.0",
             uptime,
-            requestCount
+            requestCount,
+            new ApiInfo[] {
+                new ApiInfo("greetInternal", "Greets a user internally", "POST /greetInternal", "application/json"),
+                new ApiInfo("greetBatch", "Greets a list of users internally", "POST /greetBatch", "application/json")
+            },
+            null
         );
     }
     

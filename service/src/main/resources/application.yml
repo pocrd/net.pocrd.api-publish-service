@@ -14,25 +14,25 @@ dubbo:
     qos-accept-foreign-ip: true
   registries:
     nacos-internal:
-      address: nacos://nacos-server:8848
+      address: nacos://host.docker.internal:30848
       group: INTERNAL-GROUP
     nacos-public:
-      address: nacos://nacos-server:8848
-      # group 名称不要包含下划线，否则由于DNS-1123 标签标准要求，在higress中会自动转换为短横线连接
+      address: nacos://host.docker.internal:30848
+      # group 名称不要包含下划线，否则由于 DNS-1123 标签标准要求，在 higress 中会自动转换为短横线连接
       group: PUBLIC-GROUP
   protocols:
     tri:
       name: tri
-      port: 50051
+      port: 50053
       serialization: fastjson2
       registry-ids: nacos-public
     dubbo:
       name: dubbo
-      port: 50052
+      port: 50054
       serialization: fury
       registry-ids: nacos-internal
   metadata-report:
-    address: nacos://nacos-server:8848
+    address: nacos://host.docker.internal:30848
 
 # Logging configuration
 logging:
