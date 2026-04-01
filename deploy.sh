@@ -75,7 +75,7 @@ check_env() {
     check_command java
     check_command mvn
     check_command docker
-    check_command docker-compose
+    check_command docker compose
     success "环境检查通过"
 }
 
@@ -96,7 +96,7 @@ api_check() {
     info "使用 API jar: $(basename $API_JAR)"
     
     # 查找 SDK jar - 从 service 的 lib 目录中查找（作为依赖引入）
-    SDK_JAR_PATTERN="service/target/lib/${SERVICE_NAME}-sdk-*.jar"
+    SDK_JAR_PATTERN="service/target/lib/api-publish-service-sdk-*.jar"
     SDK_JAR=$(ls $SDK_JAR_PATTERN 2>/dev/null | head -1)
     
     if [ -z "$SDK_JAR" ] || [ ! -f "$SDK_JAR" ]; then

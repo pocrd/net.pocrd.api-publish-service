@@ -2,6 +2,7 @@ package com.pocrd.api_publish_service.api;
 
 import com.pocrd.api_publish_service.api.constant.TestServiceReturnCode;
 import static com.pocrd.api_publish_service.api.constant.TestServiceReturnCode.INVALID_PARAMETER_CODE;
+import com.pocrd.api_publish_service.api.entity.BigDecimalResult;
 import com.pocrd.api_publish_service.api.entity.OrderInfo;
 import com.pocrd.api_publish_service.api.entity.PageResult;
 import com.pocrd.api_publish_service.api.entity.PartialDescribedEntity;
@@ -229,8 +230,8 @@ public interface InvalidApiTestService {
      */
     @Description("BigDecimal类型测试")
     @DesignedErrorCode({INVALID_PARAMETER_CODE})
-    String testBigDecimal(
-        @ApiParameter(name = "amount", required = true, desc = "金额") BigDecimal amount
+    BigDecimalResult testBigDecimal(
+        @ApiParameter(name = "amount", required = true, desc = "金额") int amount
     );
 }
 

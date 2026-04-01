@@ -1,6 +1,7 @@
 package com.pocrd.api_publish_service.service.impl;
 
 import com.pocrd.api_publish_service.api.InvalidApiTestService;
+import com.pocrd.api_publish_service.api.entity.BigDecimalResult;
 import com.pocrd.api_publish_service.api.entity.NonRecordEntity;
 import com.pocrd.api_publish_service.api.entity.OrderInfo;
 import com.pocrd.api_publish_service.api.entity.PageResult;
@@ -134,7 +135,7 @@ public class InvalidApiTestServiceImpl implements InvalidApiTestService {
     }
 
     @Override
-    public String testBigDecimal(BigDecimal amount) {
-        return "Amount: " + amount.toString();
+    public BigDecimalResult testBigDecimal(int amount) {
+        return new BigDecimalResult(new BigDecimal(amount), "CNY");
     }
 }
