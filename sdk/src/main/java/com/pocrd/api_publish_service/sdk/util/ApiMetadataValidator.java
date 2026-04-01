@@ -44,6 +44,7 @@ public class ApiMetadataValidator {
     private static final Map<String, String> TYPE_MAPPING = Map.ofEntries(
         Map.entry("java.util.List", "list"),
         Map.entry("java.util.Set", "set"),
+        Map.entry("org.apache.dubbo.common.stream.StreamObserver", "StreamObserver"),
         Map.entry("java.lang.String", "string"),
         Map.entry("java.lang.Integer", "int"),
         Map.entry("java.lang.Long", "long"),
@@ -357,7 +358,7 @@ public class ApiMetadataValidator {
             Class<?> rawType = (Class<?>) parameterizedType.getRawType();
             if (!CONTAINER_WHITELIST.contains(rawType.getName())) {
                 addError(ValidationError.ErrorType.UNSUPPORTED_CONTAINER,
-                    "不支持的容器类型: " + rawType.getName() + "，请使用白名单中的容器类型: " + CONTAINER_WHITELIST);
+                    "不支持的容器类型: " + rawType.getName());
             } else {
                 // 检查泛型参数
                 java.lang.reflect.Type[] typeArguments = parameterizedType.getActualTypeArguments();
@@ -449,9 +450,9 @@ public class ApiMetadataValidator {
             
             if (!CONTAINER_WHITELIST.contains(rawType.getName())) {
                 addError(ValidationError.ErrorType.UNSUPPORTED_CONTAINER,
-                    "不支持的容器类型: " + rawType.getName() + "，请使用白名单中的容器类型: " + CONTAINER_WHITELIST);
+                    "不支持的容器类型: " + rawType.getName());
             } else {
-                containerType = rawType.getSimpleName();
+                containerType = rawType.getName();
                 if (typeArguments.length > 0) {
                     checkTypeArgument(typeArguments[0], entityTypes);
                     type = typeArguments[0].getTypeName();
@@ -500,7 +501,7 @@ public class ApiMetadataValidator {
         // 不在白名单中 → 检查是否有 @Description 注解
         if (type.getAnnotation(Description.class) == null) {
             addError(ValidationError.ErrorType.MISSING_DESCRIPTION, 
-                "类型缺少 @Description 注解，不是有效的自定义类型");
+                "类型 " + typeName + " 缺少 @Description 注解，不是有效的自定义类型");
             return;
         }
 
@@ -625,7 +626,7 @@ public class ApiMetadataValidator {
 
             // 处理数组和泛型容器（统一视为 List 处理）
             if (fieldType.isArray()) {
-                containerType = "list";
+                containerType = "java.util.List";
                 Class<?> compType = fieldType.getComponentType();
                 type = compType.getName();
                 // 检查数组元素类型
@@ -636,7 +637,7 @@ public class ApiMetadataValidator {
                 }
             } else if (CONTAINER_WHITELIST.contains(fieldType.getName())) {
                 // 处理泛型容器（如 List<T>, Set<T>）
-                containerType = fieldType.getSimpleName();
+                containerType = fieldType.getName();
                 java.lang.reflect.Type genericType = field.getGenericType();
                 if (genericType instanceof java.lang.reflect.ParameterizedType paramType) {
                     java.lang.reflect.Type[] typeArgs = paramType.getActualTypeArguments();
@@ -769,13 +770,10 @@ public class ApiMetadataValidator {
      */
     public static String simplifyType(String typeName, String serviceIdPrefix) {
         if (typeName == null || typeName.isEmpty()) {
-            return typeName;
+            throw new IllegalArgumentException("类型名称不能为空");
         }
         if (TYPE_MAPPING.containsKey(typeName)) {
             return TYPE_MAPPING.get(typeName);
-        }
-        if ("StreamObserver".equals(typeName) || "list".equals(typeName)) {
-            return typeName;
         }
         String simpleName = typeName.substring(typeName.lastIndexOf('.') + 1);
         return serviceIdPrefix + "_" + simpleName;

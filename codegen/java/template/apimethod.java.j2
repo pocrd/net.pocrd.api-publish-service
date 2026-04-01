@@ -1,0 +1,90 @@
+package {{ package }};
+
+{% for import in imports %}
+import {{ import }};
+{% endfor %}
+import com.pocrd.clientsdk.ApiMethod;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * {{ method.description | default(class_name) }}
+ * <p>
+ * 服务: {{ service_name }}
+{% if method.errorCodes and method.errorCodes | length > 0 %}
+ * <p>
+ * 可能错误码: {% for code in method.errorCodes %}{{ code }}{% if not loop.last %}, {% endif %}{% endfor %}
+
+{% endif %}
+ */
+public final class {{ class_name }} extends ApiMethod<{{ method.returnType | to_java_type | to_wrapper_type }}> {
+
+    /**
+     * 方法名
+     */
+    public static final String METHOD_NAME = "{{ method.name }}";
+
+    /**
+     * 服务名
+     */
+    public static final String SERVICE_NAME = "{{ service_name }}";
+
+{% set required_params = method.parameters | selectattr('required', 'equalto', true) | list %}
+{% set optional_params = method.parameters | rejectattr('required', 'equalto', true) | list %}
+{% if method.parameters | length > 0 %}
+    // ========== 请求参数 ==========
+{% for param in method.parameters %}
+    /** {{ param.desc | default(param.name) }} */
+    private {{ param.type | to_java_type(param.containerType) }} {{ param.name }};
+{% endfor %}
+
+{% endif %}
+    // ========== 构造函数 ==========
+{% if required_params | length > 0 %}
+    /** 构造函数（包含所有必传参数） */
+    public {{ class_name }}(
+{% for param in required_params %}
+            {{ param.type | to_java_type(param.containerType) }} {{ param.name }}{% if not loop.last %},{% endif %}
+
+{% endfor %}
+    ) {
+{% for param in required_params %}
+        this.{{ param.name }} = {{ param.name }};
+{% endfor %}
+    }
+{% else %}
+    /** 默认构造函数（无必传参数） */
+    public {{ class_name }}() {
+    }
+{% endif %}
+
+{% if method.parameters | length > 0 %}
+    // ========== Getter/Setter ==========
+{% for param in method.parameters %}
+    public {{ param.type | to_java_type(param.containerType) }} get{{ param.name | to_pascal_case }}() {
+        return {{ param.name }};
+    }
+
+    public void set{{ param.name | to_pascal_case }}({{ param.type | to_java_type(param.containerType) }} {{ param.name }}) {
+        this.{{ param.name }} = {{ param.name }};
+    }
+
+{% endfor %}
+{% endif %}
+    // ========== 实现 ApiMethod 抽象方法 ==========
+    @Override
+    public String getMethodName() {
+        return METHOD_NAME;
+    }
+
+    @Override
+    public String getServiceName() {
+        return SERVICE_NAME;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public Class<{{ method.returnType | to_java_type | to_wrapper_type }}> getReturnType() {
+        return (Class<{{ method.returnType | to_java_type | to_wrapper_type }}>) (Class<?>) {{ method.returnType | to_java_type | to_wrapper_type }}.class;
+    }
+}

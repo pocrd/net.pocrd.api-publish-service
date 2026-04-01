@@ -31,6 +31,8 @@ vosk-model*
 # 忽略本地配置文件
 application-local.properties
 
+codegen/java/com/pocrd/clientsdk/autogen/*
+
 .vscode/
 datasets/
 .cursorrules

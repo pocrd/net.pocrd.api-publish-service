@@ -1,0 +1,22 @@
+package {{ package }};
+
+import com.pocrd.clientsdk.ReturnCode;
+
+/**
+ * 业务错误码汇总
+{% if has_conflicts %} * <p><b>[警告] 存在错误码冲突，请检查各服务错误码定义！</b></p>
+{% endif %} */
+public final class {{ class_name }} extends ReturnCode {
+
+{% for group_name, group_codes in groups.items() %}
+    // ========== {{ group_name }} ==========
+{% for code in group_codes %}
+    /** {{ code.desc }} */
+    public static final {{ class_name }} {{ code.name }} = new {{ class_name }}({{ code.code }}, "{{ code.desc | escape_java_string }}");
+{% endfor %}
+
+{% endfor %}
+    private {{ class_name }}(int code, String message) {
+        super(code, message);
+    }
+}
