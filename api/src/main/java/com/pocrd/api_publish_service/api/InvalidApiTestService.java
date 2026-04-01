@@ -14,31 +14,10 @@ import com.pocrd.api_publish_service.sdk.annotation.ApiParameter;
 import com.pocrd.api_publish_service.sdk.annotation.Description;
 import com.pocrd.api_publish_service.sdk.annotation.DesignedErrorCode;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
-/**
- * 无效API测试服务接口
- *
- * <p>此接口用于测试各种<strong>不正确</strong>的接口声明，验证SDK能够正确检测并报告错误。</p>
- * <p>包含以下错误场景：</p>
- * <ul>
- *   <li>缺少 @Description 注解</li>
- *   <li>参数缺少 @ApiParameter 注解</li>
- *   <li>使用不支持的JDK类型（如 LocalDateTime, Map）</li>
- *   <li>错误码超出 @ApiGroup 声明的范围</li>
- *   <li>错误码未在 @ApiGroup 中定义</li>
- *   <li>实体类缺少 @Description 注解</li>
- *   <li>实体字段缺少 @Description 注解</li>
- *   <li>实体类不是record类型</li>
- *   <li>多层嵌套泛型</li>
- *   <li>泛型返回类型</li>
- * </ul>
- *
- * <p><strong>注意：</strong>此接口故意包含错误，用于测试SDK的错误检测能力。</p>
- */
 @ApiGroup(
     name = "InvalidApiTestService",
     minCode = 2000,

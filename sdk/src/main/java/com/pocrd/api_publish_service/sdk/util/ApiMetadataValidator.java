@@ -76,6 +76,63 @@ public class ApiMetadataValidator {
     private final String serviceIdPrefix;
     private final ValidationResult result;
     private final Set<String> reportedErrors; // 用于去重
+    
+    // 扫描路径栈，用于记录当前扫描位置
+    private final java.util.Deque<ScanFrame> scanStack = new java.util.ArrayDeque<>();
+
+    /**
+     * 扫描帧，记录扫描路径中的一个位置
+     */
+    private static class ScanFrame {
+        final String interfaceName;
+        final String methodName;
+        final String parameterName;
+        final String entityName;
+        final String fieldName;
+        final LocationType locationType;
+
+        enum LocationType {
+            INTERFACE, METHOD, METHOD_RETURN, PARAMETER, ENTITY, FIELD, ERROR_CODE
+        }
+
+        ScanFrame(String interfaceName, String methodName, String parameterName, 
+                  String entityName, String fieldName, LocationType locationType) {
+            this.interfaceName = interfaceName;
+            this.methodName = methodName;
+            this.parameterName = parameterName;
+            this.entityName = entityName;
+            this.fieldName = fieldName;
+            this.locationType = locationType;
+        }
+        
+        static ScanFrame ofInterface(String interfaceName) {
+            return new ScanFrame(interfaceName, null, null, null, null, LocationType.INTERFACE);
+        }
+        
+        static ScanFrame ofMethod(String interfaceName, String methodName) {
+            return new ScanFrame(interfaceName, methodName, null, null, null, LocationType.METHOD);
+        }
+        
+        static ScanFrame ofMethodReturn(String interfaceName, String methodName) {
+            return new ScanFrame(interfaceName, methodName, null, null, null, LocationType.METHOD_RETURN);
+        }
+        
+        static ScanFrame ofParameter(String interfaceName, String methodName, String parameterName) {
+            return new ScanFrame(interfaceName, methodName, parameterName, null, null, LocationType.PARAMETER);
+        }
+        
+        static ScanFrame ofEntity(String interfaceName, String methodName, String entityName) {
+            return new ScanFrame(interfaceName, methodName, null, entityName, null, LocationType.ENTITY);
+        }
+        
+        static ScanFrame ofField(String interfaceName, String methodName, String entityName, String fieldName) {
+            return new ScanFrame(interfaceName, methodName, null, entityName, fieldName, LocationType.FIELD);
+        }
+        
+        static ScanFrame ofErrorCode(String interfaceName, String fieldName) {
+            return new ScanFrame(interfaceName, null, null, null, fieldName, LocationType.ERROR_CODE);
+        }
+    }
 
     /**
      * 创建验证器（自动从 Dubbo 配置或环境变量获取服务ID前缀）
@@ -154,22 +211,24 @@ public class ApiMetadataValidator {
      */
     public ValidationResult validate(Class<?> interfaceClass) {
         if (interfaceClass == null) {
-            addError(null, null, null, null, null, 
-                ValidationError.ErrorType.OTHER, "接口类不能为空");
+            addError(ValidationError.ErrorType.OTHER, "接口类不能为空");
             return result;
         }
-        if (!interfaceClass.isInterface()) {
-            addError(interfaceClass.getName(), null, null, null, null,
-                ValidationError.ErrorType.OTHER, "必须是接口类型");
-            return result;
-        }
-
+        
         String interfaceName = interfaceClass.getName();
+        scanStack.push(ScanFrame.ofInterface(interfaceName));
+        
+        if (!interfaceClass.isInterface()) {
+            addError(ValidationError.ErrorType.OTHER, "必须是接口类型");
+            scanStack.pop();
+            return result;
+        }
 
         // 检查 @ApiGroup
         ApiGroup apiGroup = interfaceClass.getAnnotation(ApiGroup.class);
         if (apiGroup == null) {
             // 没有@ApiGroup的接口不处理
+            scanStack.pop();
             return result;
         }
 
@@ -186,28 +245,28 @@ public class ApiMetadataValidator {
         if (desc != null) {
             description = desc.value();
         } else {
-            addError(interfaceName, null, null, null, null,
-                ValidationError.ErrorType.MISSING_DESCRIPTION, "接口必须标记 @Description 注解");
+            addError(ValidationError.ErrorType.MISSING_DESCRIPTION, "接口必须标记 @Description 注解");
         }
 
         // 提取错误码
         Set<Integer> allErrorCodes = new HashSet<>();
-        List<ErrorCodeInfo> errorCodes = extractErrorCodes(apiGroup.codeDefine(), interfaceName, 
-            apiGroup.minCode(), apiGroup.maxCode(), allErrorCodes);
+        List<ErrorCodeInfo> errorCodes = extractErrorCodes(apiGroup.codeDefine(), allErrorCodes);
 
         // 收集实体类型
         Set<Class<?>> entityTypes = new HashSet<>();
         List<MethodDefinition> methods = new ArrayList<>();
 
         for (Method method : interfaceClass.getDeclaredMethods()) {
-            MethodDefinition methodDef = extractMethodMetadata(method, entityTypes, interfaceName, allErrorCodes, apiGroup.codeDefine());
+            MethodDefinition methodDef = extractMethodMetadata(method, entityTypes, allErrorCodes, apiGroup.codeDefine());
             if (methodDef != null) {
                 methods.add(methodDef);
             }
         }
 
         // 收集实体定义
-        Map<String, EntityDefinition> entities = collectEntityDefinitions(entityTypes, interfaceName);
+        Map<String, EntityDefinition> entities = collectEntityDefinitions(entityTypes);
+        
+        scanStack.pop();
 
         ServiceDefinition serviceDef = new ServiceDefinition(
             interfaceName,
@@ -225,11 +284,22 @@ public class ApiMetadataValidator {
     }
 
     /**
-     * 添加错误（自动去重）
+     * 添加错误（自动去重，从扫描栈获取路径信息）
      */
-    private void addError(String interfaceName, String methodName, String parameterName,
-                         String entityName, String fieldName,
-                         ValidationError.ErrorType errorType, String errorMessage) {
+    private void addError(ValidationError.ErrorType errorType, String errorMessage) {
+        // 从扫描栈顶获取当前路径信息
+        ScanFrame frame = scanStack.peek();
+        String interfaceName = frame != null ? frame.interfaceName : null;
+        String methodName = frame != null ? frame.methodName : null;
+        String parameterName = frame != null ? frame.parameterName : null;
+        String entityName = frame != null ? frame.entityName : null;
+        String fieldName = frame != null ? frame.fieldName : null;
+        ScanFrame.LocationType locationType = frame != null ? frame.locationType : null;
+        
+        // 根据位置类型，在错误消息中添加明确的位置信息
+        String locationPrefix = getLocationPrefix(locationType);
+        String enhancedMessage = locationPrefix != null ? locationPrefix + errorMessage : errorMessage;
+        
         // 生成错误指纹用于去重
         String fingerprint = String.join("|", 
             String.valueOf(interfaceName),
@@ -238,7 +308,7 @@ public class ApiMetadataValidator {
             String.valueOf(entityName),
             String.valueOf(fieldName),
             errorType.name(),
-            errorMessage
+            enhancedMessage
         );
         
         if (reportedErrors.contains(fingerprint)) {
@@ -246,45 +316,63 @@ public class ApiMetadataValidator {
         }
         reportedErrors.add(fingerprint);
         
-        result.addError(interfaceName, methodName, parameterName, entityName, fieldName, errorType, errorMessage);
+        result.addError(interfaceName, methodName, parameterName, entityName, fieldName, errorType, enhancedMessage);
+    }
+    
+    /**
+     * 获取位置前缀，用于明确错误发生的位置
+     */
+    private String getLocationPrefix(ScanFrame.LocationType locationType) {
+        if (locationType == null) {
+            return null;
+        }
+        return switch (locationType) {
+            case METHOD_RETURN -> "方法返回类型: ";
+            case PARAMETER -> "参数: ";
+            case FIELD -> "字段: ";
+            case ERROR_CODE -> "错误码: ";
+            default -> null;
+        };
     }
 
     /**
      * 提取方法元数据
      */
     private MethodDefinition extractMethodMetadata(Method method, Set<Class<?>> entityTypes,
-                                                    String interfaceName, Set<Integer> allErrorCodes,
+                                                    Set<Integer> allErrorCodes,
                                                     Class<? extends AbstractReturnCode> codeDefineClass) {
         String methodName = method.getName();
+        scanStack.push(ScanFrame.ofMethod(scanStack.peek().interfaceName, methodName));
+        
         Class<?> returnType = method.getReturnType();
 
         // 检查返回类型（包括数组，统一视为 List 处理）
+        scanStack.push(ScanFrame.ofMethodReturn(scanStack.peek().interfaceName, methodName));
         java.lang.reflect.Type genericReturnType = method.getGenericReturnType();
         if (returnType.isArray()) {
             // 数组返回类型统一视为 List
             Class<?> compType = returnType.getComponentType();
-            checkTypeArgument(compType, entityTypes, interfaceName, methodName, null);
+            checkTypeArgument(compType, entityTypes);
         } else if (genericReturnType instanceof java.lang.reflect.ParameterizedType parameterizedType) {
             Class<?> rawType = (Class<?>) parameterizedType.getRawType();
-            if (!isWhitelistedContainer(rawType)) {
-                addError(interfaceName, methodName, null, null, null,
-                    ValidationError.ErrorType.UNSUPPORTED_CONTAINER,
+            if (!CONTAINER_WHITELIST.contains(rawType.getName())) {
+                addError(ValidationError.ErrorType.UNSUPPORTED_CONTAINER,
                     "不支持的容器类型: " + rawType.getName() + "，请使用白名单中的容器类型: " + CONTAINER_WHITELIST);
             } else {
                 // 检查泛型参数
                 java.lang.reflect.Type[] typeArguments = parameterizedType.getActualTypeArguments();
                 if (typeArguments.length > 0) {
-                    checkTypeArgument(typeArguments[0], entityTypes, interfaceName, methodName, null);
+                    checkTypeArgument(typeArguments[0], entityTypes);
                 }
             }
         } else if (genericReturnType instanceof java.lang.reflect.TypeVariable) {
             // 泛型类型变量（如 <T> T）
-            addError(interfaceName, methodName, null, null, null,
-                ValidationError.ErrorType.UNSUPPORTED_TYPE,
+            addError(ValidationError.ErrorType.UNSUPPORTED_TYPE,
                 "不支持的泛型返回类型: " + genericReturnType.getTypeName() + "，请使用具体类型");
         } else {
-            checkType(returnType, entityTypes, interfaceName, methodName, null);
+            checkType(returnType, entityTypes);
         }
+        scanStack.pop();
 
         // 检查 @Description
         String description = null;
@@ -292,8 +380,7 @@ public class ApiMetadataValidator {
         if (methodDesc != null) {
             description = methodDesc.value();
         } else {
-            addError(interfaceName, methodName, null, null, null,
-                ValidationError.ErrorType.MISSING_DESCRIPTION, "方法必须标记 @Description 注解");
+            addError(ValidationError.ErrorType.MISSING_DESCRIPTION, "方法必须标记 @Description 注解");
         }
 
         // 检查错误码
@@ -304,8 +391,7 @@ public class ApiMetadataValidator {
             if (allErrorCodes != null) {
                 for (int code : errorCodes) {
                     if (!allErrorCodes.contains(code)) {
-                        addError(interfaceName, methodName, null, null, null,
-                            ValidationError.ErrorType.INVALID_ERROR_CODE,
+                        addError(ValidationError.ErrorType.INVALID_ERROR_CODE,
                             "@DesignedErrorCode 中的错误码 " + code + " 不存在于 @ApiGroup 声明的错误码列表中（" + codeDefineClass.getName() + "）");
                     }
                 }
@@ -315,21 +401,24 @@ public class ApiMetadataValidator {
         // 提取参数
         List<ParameterDefinition> params = new ArrayList<>();
         for (Parameter param : method.getParameters()) {
-            ParameterDefinition paramDef = extractParameterMetadata(param, entityTypes, interfaceName, methodName);
+            ParameterDefinition paramDef = extractParameterMetadata(param, entityTypes);
             if (paramDef != null) {
                 params.add(paramDef);
             }
         }
-
+        
+        scanStack.pop();
         return new MethodDefinition(methodName, returnType.getName(), description, errorCodes, params);
     }
 
     /**
      * 提取参数元数据
      */
-    private ParameterDefinition extractParameterMetadata(Parameter param, Set<Class<?>> entityTypes,
-                                                          String interfaceName, String methodName) {
+    private ParameterDefinition extractParameterMetadata(Parameter param, Set<Class<?>> entityTypes) {
         String paramName = param.getName();
+        ScanFrame parentFrame = scanStack.peek();
+        scanStack.push(ScanFrame.ofParameter(parentFrame.interfaceName, parentFrame.methodName, paramName));
+        
         Class<?> paramType = param.getType();
         String type = paramType.getName();
         String containerType = null;
@@ -337,8 +426,8 @@ public class ApiMetadataValidator {
         // 检查 @ApiParameter
         ApiParameter apiParam = param.getAnnotation(ApiParameter.class);
         if (apiParam == null) {
-            addError(interfaceName, methodName, paramName, null, null,
-                ValidationError.ErrorType.MISSING_API_PARAMETER, "参数必须标记 @ApiParameter 注解");
+            addError(ValidationError.ErrorType.MISSING_API_PARAMETER, "参数必须标记 @ApiParameter 注解");
+            scanStack.pop();
             return null;
         }
 
@@ -358,23 +447,23 @@ public class ApiMetadataValidator {
                 typeArguments = parameterizedType.getActualTypeArguments();
             }
             
-            if (!isWhitelistedContainer(rawType)) {
-                addError(interfaceName, methodName, paramName, null, null,
-                    ValidationError.ErrorType.UNSUPPORTED_CONTAINER,
+            if (!CONTAINER_WHITELIST.contains(rawType.getName())) {
+                addError(ValidationError.ErrorType.UNSUPPORTED_CONTAINER,
                     "不支持的容器类型: " + rawType.getName() + "，请使用白名单中的容器类型: " + CONTAINER_WHITELIST);
             } else {
                 containerType = rawType.getSimpleName();
                 if (typeArguments.length > 0) {
-                    checkTypeArgument(typeArguments[0], entityTypes, interfaceName, methodName, paramName);
+                    checkTypeArgument(typeArguments[0], entityTypes);
                     type = typeArguments[0].getTypeName();
                 }
             }
         }
         // 普通类型
         else {
-            checkType(paramType, entityTypes, interfaceName, methodName, paramName);
+            checkType(paramType, entityTypes);
         }
 
+        scanStack.pop();
         return new ParameterDefinition(
             paramName,
             simplifyType(type),
@@ -393,45 +482,48 @@ public class ApiMetadataValidator {
      * 检查类型（基础类型和实体类型，不检查容器类型和数组类型）
      * 注意：数组类型应在调用方统一转为 List 处理，不应传入此方法
      */
-    private void checkType(Class<?> type, Set<Class<?>> entityTypes, String interfaceName, 
-                          String methodName, String paramName) {
+    private void checkType(Class<?> type, Set<Class<?>> entityTypes) {
         if (type == null) {
-            addError(interfaceName, methodName, paramName, null, null,
-                ValidationError.ErrorType.UNSUPPORTED_TYPE, "类型为 null");
+            addError(ValidationError.ErrorType.UNSUPPORTED_TYPE, "类型为 null");
             return;
         }
 
         String typeName = type.getName();
 
+        // 在白名单中 → 直接通过
         if (TYPE_WHITELIST.contains(typeName)) {
             return;
         }
 
         // 注意：容器类型和数组类型不在此处检查，应在调用方统一处理
 
-        // 其他类型视为实体（包括不在白名单中的JDK类型和基本类型，统一按实体规范检查）
+        // 不在白名单中 → 检查是否有 @Description 注解
+        if (type.getAnnotation(Description.class) == null) {
+            addError(ValidationError.ErrorType.MISSING_DESCRIPTION, 
+                "类型缺少 @Description 注解，不是有效的自定义类型");
+            return;
+        }
+
+        // 有 @Description 注解 → 添加到实体集合等待后续检查
         entityTypes.add(type);
     }
 
     /**
      * 检查泛型参数类型（递归处理嵌套泛型）
      */
-    private void checkTypeArgument(java.lang.reflect.Type typeArg, Set<Class<?>> entityTypes,
-                                    String interfaceName, String methodName, String paramName) {
+    private void checkTypeArgument(java.lang.reflect.Type typeArg, Set<Class<?>> entityTypes) {
         // 处理嵌套泛型类型（如 List<List<String>> 中的 List<String>）
         if (typeArg instanceof java.lang.reflect.ParameterizedType nestedParamType) {
             Class<?> rawType = (Class<?>) nestedParamType.getRawType();
             // 禁止嵌套容器类型（即使是白名单中的容器类型也不允许嵌套）
-            addError(interfaceName, methodName, paramName, null, null,
-                ValidationError.ErrorType.UNSUPPORTED_CONTAINER,
+            addError(ValidationError.ErrorType.UNSUPPORTED_CONTAINER,
                 "不支持的嵌套容器类型: " + rawType.getName() + "，容器类型不支持嵌套使用");
             return;
         }
         
         // 处理泛型类型变量（如 <T>）
         if (typeArg instanceof java.lang.reflect.TypeVariable) {
-            addError(interfaceName, methodName, paramName, null, null,
-                ValidationError.ErrorType.UNSUPPORTED_TYPE,
+            addError(ValidationError.ErrorType.UNSUPPORTED_TYPE,
                 "不支持的泛型类型变量: " + typeArg.getTypeName() + "，请使用具体类型");
             return;
         }
@@ -445,7 +537,7 @@ public class ApiMetadataValidator {
 
         try {
             Class<?> clazz = Class.forName(typeName);
-            checkType(clazz, entityTypes, interfaceName, methodName, paramName);
+            checkType(clazz, entityTypes);
         } catch (ClassNotFoundException e) {
             // 可能是基本类型或数组类型，忽略
         }
@@ -454,11 +546,13 @@ public class ApiMetadataValidator {
     /**
      * 收集实体定义
      */
-    private Map<String, EntityDefinition> collectEntityDefinitions(Set<Class<?>> entityTypes, String interfaceName) {
+    private Map<String, EntityDefinition> collectEntityDefinitions(Set<Class<?>> entityTypes) {
         Map<String, EntityDefinition> entities = new LinkedHashMap<>();
         Set<Class<?>> processedTypes = new HashSet<>();
         Set<Class<?>> pendingTypes = new HashSet<>(entityTypes);
         Map<String, String> simpleNameToFullName = new HashMap<>();
+        String interfaceName = scanStack.peek().interfaceName;
+        String methodName = scanStack.peek().methodName;
 
         while (!pendingTypes.isEmpty()) {
             Set<Class<?>> newTypes = new HashSet<>();
@@ -472,15 +566,16 @@ public class ApiMetadataValidator {
 
                 // 检查类名冲突
                 if (simpleNameToFullName.containsKey(simpleName)) {
-                    addError(interfaceName, null, null, fullName, null,
-                        ValidationError.ErrorType.ENTITY_NAME_CONFLICT,
+                    scanStack.push(ScanFrame.ofEntity(interfaceName, methodName, fullName));
+                    addError(ValidationError.ErrorType.ENTITY_NAME_CONFLICT,
                         "实体类名冲突：" + simpleName + " 被多个类使用：" + 
                         simpleNameToFullName.get(simpleName) + " 和 " + fullName);
+                    scanStack.pop();
                     continue;
                 }
                 simpleNameToFullName.put(simpleName, fullName);
 
-                EntityDefinition entityDef = extractEntityMetadata(entityType, newTypes, processedTypes, interfaceName);
+                EntityDefinition entityDef = extractEntityMetadata(entityType, newTypes, processedTypes);
                 if (entityDef != null) {
                     entities.put(serviceIdPrefix + "_" + simpleName, entityDef);
                 }
@@ -496,21 +591,25 @@ public class ApiMetadataValidator {
      * 提取实体元数据
      */
     private EntityDefinition extractEntityMetadata(Class<?> entityType, Set<Class<?>> nestedEntityTypes,
-                                                    Set<Class<?>> processedTypes, String interfaceName) {
+                                                    Set<Class<?>> processedTypes) {
         String entityName = entityType.getName();
+        ScanFrame parentFrame = scanStack.peek();
+        String interfaceName = parentFrame.interfaceName;
+        String methodName = parentFrame.methodName;
+        scanStack.push(ScanFrame.ofEntity(interfaceName, methodName, entityName));
 
         // 先检查 @Description - 如果没有 @Description，说明不是自定义实体类型
         Description classDesc = entityType.getAnnotation(Description.class);
         if (classDesc == null) {
-            addError(interfaceName, null, null, entityName, null,
-                ValidationError.ErrorType.MISSING_DESCRIPTION, "类型缺少 @Description 注解，不是有效的自定义类型");
+            addError(ValidationError.ErrorType.MISSING_DESCRIPTION, "类型缺少 @Description 注解，不是有效的自定义类型");
+            scanStack.pop();
             return null;
         }
 
         // 只有带 @Description 的自定义类型才需要是 record
         if (!entityType.isRecord()) {
-            addError(interfaceName, null, null, entityName, null,
-                ValidationError.ErrorType.NON_RECORD_ENTITY, "实体类必须使用record类型定义");
+            addError(ValidationError.ErrorType.NON_RECORD_ENTITY, "实体类必须使用record类型定义");
+            scanStack.pop();
             return null;
         }
 
@@ -529,34 +628,44 @@ public class ApiMetadataValidator {
                 containerType = "list";
                 Class<?> compType = fieldType.getComponentType();
                 type = compType.getName();
-                if (isEntityType(compType) && !processedTypes.contains(compType)) {
-                    nestedEntityTypes.add(compType);
+                // 检查数组元素类型
+                if (!TYPE_WHITELIST.contains(type)) {
+                    scanStack.push(ScanFrame.ofField(interfaceName, methodName, entityName, field.getName()));
+                    checkType(compType, nestedEntityTypes);
+                    scanStack.pop();
                 }
-            } else if (isWhitelistedContainer(fieldType)) {
+            } else if (CONTAINER_WHITELIST.contains(fieldType.getName())) {
                 // 处理泛型容器（如 List<T>, Set<T>）
                 containerType = fieldType.getSimpleName();
                 java.lang.reflect.Type genericType = field.getGenericType();
                 if (genericType instanceof java.lang.reflect.ParameterizedType paramType) {
                     java.lang.reflect.Type[] typeArgs = paramType.getActualTypeArguments();
-                    if (typeArgs.length > 0) {
+                    // 支持只包含一个类型参数的泛型容器
+                    if (typeArgs.length == 1) {
                         java.lang.reflect.Type typeArg = typeArgs[0];
                         if (typeArg instanceof Class<?> compClass) {
                             type = compClass.getName();
-                            if (isEntityType(compClass) && !processedTypes.contains(compClass)) {
-                                nestedEntityTypes.add(compClass);
+                            if (!TYPE_WHITELIST.contains(type)) {
+                                scanStack.push(ScanFrame.ofField(interfaceName, methodName, entityName, field.getName()));
+                                checkType(compClass, nestedEntityTypes);
+                                scanStack.pop();
                             }
                         }
                     }
                 }
-            } else if (isEntityType(fieldType) && !processedTypes.contains(fieldType)) {
-                nestedEntityTypes.add(fieldType);
+            } else if (!TYPE_WHITELIST.contains(type)) {
+                // 检查普通字段类型
+                scanStack.push(ScanFrame.ofField(interfaceName, methodName, entityName, field.getName()));
+                checkType(fieldType, nestedEntityTypes);
+                scanStack.pop();
             }
 
             // 检查字段 @Description
             Description fieldDesc = field.getAnnotation(Description.class);
             if (fieldDesc == null) {
-                addError(interfaceName, null, null, entityName, field.getName(),
-                    ValidationError.ErrorType.MISSING_DESCRIPTION, "字段必须标记 @Description 注解");
+                scanStack.push(ScanFrame.ofField(interfaceName, methodName, entityName, field.getName()));
+                addError(ValidationError.ErrorType.MISSING_DESCRIPTION, "字段必须标记 @Description 注解");
+                scanStack.pop();
             }
 
             String enumDef = null;
@@ -574,6 +683,7 @@ public class ApiMetadataValidator {
             ));
         }
 
+        scanStack.pop();
         return new EntityDefinition(
             simplifyType(entityName),
             classDesc.value(),
@@ -586,8 +696,16 @@ public class ApiMetadataValidator {
      * 提取错误码
      */
     private List<ErrorCodeInfo> extractErrorCodes(Class<? extends AbstractReturnCode> codeDefineClass,
-                                                   String interfaceName, int minCode, int maxCode,
                                                    Set<Integer> allErrorCodes) {
+        ApiGroup apiGroup = scanStack.peek().interfaceName != null ? 
+            getInterfaceApiGroup(scanStack.peek().interfaceName) : null;
+        if (apiGroup == null) {
+            return null;
+        }
+        int minCode = apiGroup.minCode();
+        int maxCode = apiGroup.maxCode();
+        String interfaceName = scanStack.peek().interfaceName;
+        
         try {
             Field[] fields = codeDefineClass.getDeclaredFields();
             Map<Integer, ErrorCodeInfo.ErrorCodeItem> codes = new HashMap<>();
@@ -603,13 +721,15 @@ public class ApiMetadataValidator {
                         int code = returnCode.getCode();
 
                         if (code < minCode || code > maxCode) {
-                            addError(interfaceName, null, null, null, field.getName(),
-                                ValidationError.ErrorType.INVALID_ERROR_CODE,
+                            scanStack.push(ScanFrame.ofErrorCode(interfaceName, field.getName()));
+                            addError(ValidationError.ErrorType.INVALID_ERROR_CODE,
                                 "错误码 " + code + " 超出范围 [" + minCode + ", " + maxCode + "]");
+                            scanStack.pop();
                         } else if (allErrorCodes.contains(code)) {
-                            addError(interfaceName, null, null, null, field.getName(),
-                                ValidationError.ErrorType.INVALID_ERROR_CODE,
+                            scanStack.push(ScanFrame.ofErrorCode(interfaceName, field.getName()));
+                            addError(ValidationError.ErrorType.INVALID_ERROR_CODE,
                                 "错误码 " + code + " 与之前声明的错误码冲突");
+                            scanStack.pop();
                         } else {
                             allErrorCodes.add(code);
                             codes.put(code, new ErrorCodeInfo.ErrorCodeItem(
@@ -623,34 +743,18 @@ public class ApiMetadataValidator {
                 return List.of(new ErrorCodeInfo(new ArrayList<>(codes.values())));
             }
         } catch (IllegalAccessException e) {
-            addError(interfaceName, null, null, null, null,
-                ValidationError.ErrorType.OTHER, "提取错误码失败: " + e.getMessage());
+            addError(ValidationError.ErrorType.OTHER, "提取错误码失败: " + e.getMessage());
         }
         return null;
     }
-
-    /**
-     * 判断是否为实体类型
-     */
-    private boolean isEntityType(Class<?> type) {
-        if (type == null || type.isPrimitive()) {
-            return false;
+    
+    private ApiGroup getInterfaceApiGroup(String interfaceName) {
+        try {
+            Class<?> clazz = Class.forName(interfaceName);
+            return clazz.getAnnotation(ApiGroup.class);
+        } catch (ClassNotFoundException e) {
+            return null;
         }
-        String typeName = type.getName();
-        if (TYPE_WHITELIST.contains(typeName) || CONTAINER_WHITELIST.contains(typeName)) {
-            return false;
-        }
-        if (type.isArray()) {
-            return isEntityType(type.getComponentType());
-        }
-        return !typeName.startsWith("java.");
-    }
-
-    /**
-     * 检查是否在容器白名单
-     */
-    private boolean isWhitelistedContainer(Class<?> type) {
-        return type != null && CONTAINER_WHITELIST.contains(type.getName());
     }
 
     /**
