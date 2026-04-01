@@ -258,9 +258,13 @@ public class ApiMetadataValidator {
         String methodName = method.getName();
         Class<?> returnType = method.getReturnType();
 
-        // 检查返回类型
+        // 检查返回类型（包括数组，统一视为 List 处理）
         java.lang.reflect.Type genericReturnType = method.getGenericReturnType();
-        if (genericReturnType instanceof java.lang.reflect.ParameterizedType parameterizedType) {
+        if (returnType.isArray()) {
+            // 数组返回类型统一视为 List
+            Class<?> compType = returnType.getComponentType();
+            checkTypeArgument(compType, entityTypes, interfaceName, methodName, null);
+        } else if (genericReturnType instanceof java.lang.reflect.ParameterizedType parameterizedType) {
             Class<?> rawType = (Class<?>) parameterizedType.getRawType();
             if (!isWhitelistedContainer(rawType)) {
                 addError(interfaceName, methodName, null, null, null,
@@ -338,35 +342,28 @@ public class ApiMetadataValidator {
             return null;
         }
 
-        // 处理 StreamObserver
-        if ("org.apache.dubbo.common.stream.StreamObserver".equals(paramType.getName())) {
-            containerType = "StreamObserver";
-            java.lang.reflect.Type genericType = param.getParameterizedType();
-            if (genericType instanceof java.lang.reflect.ParameterizedType parameterizedType) {
-                java.lang.reflect.Type[] typeArguments = parameterizedType.getActualTypeArguments();
-                if (typeArguments.length > 0) {
-                    checkTypeArgument(typeArguments[0], entityTypes, interfaceName, methodName, paramName);
-                    type = typeArguments[0].getTypeName();
-                }
+        // 处理泛型容器（包括数组，统一视为 List 处理）
+        if (paramType.isArray() || param.getParameterizedType() instanceof java.lang.reflect.ParameterizedType) {
+            Class<?> rawType;
+            java.lang.reflect.Type[] typeArguments;
+            
+            if (paramType.isArray()) {
+                // 数组类型统一视为 List
+                rawType = java.util.List.class;
+                typeArguments = new java.lang.reflect.Type[] { paramType.getComponentType() };
+            } else {
+                java.lang.reflect.ParameterizedType parameterizedType = 
+                    (java.lang.reflect.ParameterizedType) param.getParameterizedType();
+                rawType = (Class<?>) parameterizedType.getRawType();
+                typeArguments = parameterizedType.getActualTypeArguments();
             }
-        }
-        // 处理数组（统一标记为list）
-        else if (paramType.isArray()) {
-            containerType = "list";
-            Class<?> compType = paramType.getComponentType();
-            type = compType.getName();
-            checkType(compType, entityTypes, interfaceName, methodName, paramName);
-        }
-        // 处理泛型容器
-        else if (param.getParameterizedType() instanceof java.lang.reflect.ParameterizedType parameterizedType) {
-            Class<?> rawType = (Class<?>) parameterizedType.getRawType();
+            
             if (!isWhitelistedContainer(rawType)) {
                 addError(interfaceName, methodName, paramName, null, null,
                     ValidationError.ErrorType.UNSUPPORTED_CONTAINER,
                     "不支持的容器类型: " + rawType.getName() + "，请使用白名单中的容器类型: " + CONTAINER_WHITELIST);
             } else {
                 containerType = rawType.getSimpleName();
-                java.lang.reflect.Type[] typeArguments = parameterizedType.getActualTypeArguments();
                 if (typeArguments.length > 0) {
                     checkTypeArgument(typeArguments[0], entityTypes, interfaceName, methodName, paramName);
                     type = typeArguments[0].getTypeName();
@@ -393,7 +390,8 @@ public class ApiMetadataValidator {
     }
 
     /**
-     * 检查类型（基础类型和实体类型，不检查容器类型）
+     * 检查类型（基础类型和实体类型，不检查容器类型和数组类型）
+     * 注意：数组类型应在调用方统一转为 List 处理，不应传入此方法
      */
     private void checkType(Class<?> type, Set<Class<?>> entityTypes, String interfaceName, 
                           String methodName, String paramName) {
@@ -409,13 +407,7 @@ public class ApiMetadataValidator {
             return;
         }
 
-        // 注意：容器类型白名单不在此处检查，应在调用方处理泛型时检查
-
-        // 数组类型 - 递归检查元素类型
-        if (type.isArray()) {
-            checkType(type.getComponentType(), entityTypes, interfaceName, methodName, paramName);
-            return;
-        }
+        // 注意：容器类型和数组类型不在此处检查，应在调用方统一处理
 
         // 其他类型视为实体（包括不在白名单中的JDK类型和基本类型，统一按实体规范检查）
         entityTypes.add(type);
@@ -532,13 +524,29 @@ public class ApiMetadataValidator {
             String type = fieldType.getName();
             String containerType = null;
 
-            // 处理数组（统一标记为list）
+            // 处理数组和泛型容器（统一视为 List 处理）
             if (fieldType.isArray()) {
                 containerType = "list";
                 Class<?> compType = fieldType.getComponentType();
                 type = compType.getName();
                 if (isEntityType(compType) && !processedTypes.contains(compType)) {
                     nestedEntityTypes.add(compType);
+                }
+            } else if (isWhitelistedContainer(fieldType)) {
+                // 处理泛型容器（如 List<T>, Set<T>）
+                containerType = fieldType.getSimpleName();
+                java.lang.reflect.Type genericType = field.getGenericType();
+                if (genericType instanceof java.lang.reflect.ParameterizedType paramType) {
+                    java.lang.reflect.Type[] typeArgs = paramType.getActualTypeArguments();
+                    if (typeArgs.length > 0) {
+                        java.lang.reflect.Type typeArg = typeArgs[0];
+                        if (typeArg instanceof Class<?> compClass) {
+                            type = compClass.getName();
+                            if (isEntityType(compClass) && !processedTypes.contains(compClass)) {
+                                nestedEntityTypes.add(compClass);
+                            }
+                        }
+                    }
                 }
             } else if (isEntityType(fieldType) && !processedTypes.contains(fieldType)) {
                 nestedEntityTypes.add(fieldType);
