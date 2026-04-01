@@ -29,8 +29,8 @@ public class JavaClientCodeGeneratorTest {
             generator.generate(metadata, tempDir.toString());
             
             // 验证生成的文件
-            Path clientDir = tempDir.resolve("com/test/client");
-            Path entityDir = tempDir.resolve("com/test/entity");
+            Path clientDir = tempDir.resolve("com/test/client/client");
+            Path entityDir = tempDir.resolve("com/test/client/entity");
             
             assertTrue(Files.exists(clientDir), "Client directory should exist");
             assertTrue(Files.exists(entityDir), "Entity directory should exist");
