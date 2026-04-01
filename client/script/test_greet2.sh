@@ -8,7 +8,7 @@
 set -e
 
 BASE_URL="${HIGRESS_URL:-http://localhost}"
-SERVICE_PATH="/api/com.pocrd.api_publish_service.api.GreeterServiceHttpExport"
+SERVICE_PATH="/dapi/com.pocrd.api_publish_service.api.GreeterServiceHttpExport"
 METHOD="greet2"
 
 echo "=============================================="

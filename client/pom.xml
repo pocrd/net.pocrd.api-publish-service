@@ -38,6 +38,15 @@
             <version>1.0.0</version>
         </dependency>
 
+        <!-- Codegen Java SDK - 用于接口调用 -->
+        <dependency>
+            <groupId>com.pocrd</groupId>
+            <artifactId>api-publish-service-codegen-java</artifactId>
+            <version>1.0.0</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/../codegen/java/target/api-publish-service-codegen-java-1.0.0.jar</systemPath>
+        </dependency>
+
         <!-- Dubbo Triple 协议支持（用于 HTTP 模式） -->
         <dependency>
             <groupId>org.apache.dubbo</groupId>

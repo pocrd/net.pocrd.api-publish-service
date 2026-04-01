@@ -216,6 +216,7 @@ class JavaCodeGenerator:
         'int': 'Integer',
         'long': 'Long',
         'bool': 'Boolean',
+        'boolean': 'Boolean',
         'float': 'Float',
         'double': 'Double',
         'byte': 'Byte',
@@ -257,6 +258,14 @@ class JavaCodeGenerator:
         self.env.filters['to_camel_case'] = self.to_camel_case
         self.env.filters['to_pascal_case'] = self.to_pascal_case
         self.env.filters['escape_java_string'] = self.escape_java_string
+        # 实体 JSON 序列化相关过滤器
+        self.env.filters['to_json_value'] = self.to_json_value
+        self.env.filters['default_value'] = self.default_value
+        self.env.filters['parse_json_value'] = self.parse_json_value
+        # 注册模板测试：判断类型是否为实体类（含 '_'，非内置基础类型）
+        self.env.tests['entity_type'] = lambda t: '_' in t and t not in self.TYPE_MAPPING
+        # 注册模板测试：判断类型是否为基础类型（非对象类型）
+        self.env.tests['primitive_type'] = lambda t: t in self.TYPE_MAPPING
     
     def _normalize_type(self, type_str: str) -> str:
         """将类型字符串规范化：
@@ -270,6 +279,13 @@ class JavaCodeGenerator:
         # 内置基础类型
         if type_str in self.TYPE_MAPPING:
             return self.TYPE_MAPPING[type_str]
+        # 处理错误生成的类型名（如 ApiPublish_String 应该映射为 String）
+        if '_' in type_str:
+            parts = type_str.split('_')
+            if len(parts) == 2:
+                potential_builtin = parts[1].lower()
+                if potential_builtin in self.TYPE_MAPPING:
+                    return self.TYPE_MAPPING[potential_builtin]
         has_dot = '.' in type_str
         has_underscore = '_' in type_str
         if has_dot and has_underscore:
@@ -306,7 +322,7 @@ class JavaCodeGenerator:
         # 获取基础 Java 类型（规范化，去掉前缀）
         java_type = self._normalize_type(type_str)
         
-        # 处理容器类型
+        # 处理容器类型（作为 container_type 参数传入）
         if container_type:
             container = container_type.lower()
             if container == 'list':
@@ -318,11 +334,35 @@ class JavaCodeGenerator:
             elif container == 'array':
                 return f'{java_type}[]'
         
+        # 处理容器类型本身作为 type_str 的情况（如返回类型是 list/set）
+        type_lower = type_str.lower()
+        if type_lower == 'list':
+            return 'List'
+        elif type_lower == 'set':
+            return 'Set'
+        
+        # 处理 stream 类型（流式响应）
+        if type_lower == 'stream':
+            return 'Stream'
+        
+        # 处理 boolean 基本类型 - 在泛型中需要使用 Boolean
+        if type_lower == 'boolean':
+            return 'boolean'
+        
         return java_type
     
     def to_wrapper_type(self, type_str: str) -> str:
         """将基本类型转换为包装类，非基础类型原样返回"""
         # to_wrapper_type 接收的已经是 java_type（经过 to_java_type 转换后）
+        # 容器类型直接返回，不需要转换
+        if type_str in ('List', 'Set'):
+            return type_str
+        # void 类型特殊处理 - API方法返回void时，使用Void.class
+        if type_str == 'void':
+            return 'Void'
+        # 流类型特殊处理
+        if type_str in ('stream', 'Stream'):
+            return 'Object'  # 流类型使用Object作为泛型参数
         return self.WRAPPER_MAPPING.get(type_str, type_str)
     
     def to_class_name(self, full_type: str) -> str:
@@ -362,6 +402,95 @@ class JavaCodeGenerator:
         if not s:
             return ''
         return s.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
+
+    def to_json_value(self, field_name: str, type_str: str = '', container_type: str = '') -> str:
+        """生成字段序列化为 JSON 的代码片段"""
+        # 如果有容器类型，使用 JsonUtil 处理集合
+        if container_type:
+            return f'com.pocrd.clientsdk.JsonUtil.toJson({field_name})'
+        # 实体类型（含 _）调用自身的 toJson() 方法
+        if '_' in type_str:
+            return f'{field_name}.toJson()'
+        # 基础类型使用 JsonUtil
+        return f'com.pocrd.clientsdk.JsonUtil.toJson({field_name})'
+
+    def default_value(self, type_str: str, container_type: Optional[str] = None) -> str:
+        """返回类型的默认值（用于 fromJson 初始化）"""
+        # 容器类型默认返回空集合，避免空指针异常
+        if container_type:
+            container = container_type.lower()
+            if container == 'list':
+                return 'java.util.Collections.emptyList()'
+            if container == 'set':
+                return 'java.util.Collections.emptySet()'
+        
+        defaults = {
+            'string': '""',
+            'int': '0',
+            'long': '0L',
+            'bool': 'false',
+            'float': '0.0f',
+            'double': '0.0',
+            'byte': '0',
+            'short': '0',
+            'char': "'\\0'",
+        }
+        return defaults.get(type_str, 'null')
+
+    def parse_json_value(self, type_str: str, container_type: Optional[str] = None) -> str:
+        """生成从 JSON 字符串解析字段值的代码片段，支持容器类型"""
+        # 单值基础类型解析（使用 value 变量）
+        single_parsers = {
+            'string': 'value.replace("\\"", "")',
+            'int': 'Integer.parseInt(value)',
+            'long': 'Long.parseLong(value)',
+            'bool': 'Boolean.parseBoolean(value)',
+            'float': 'Float.parseFloat(value)',
+            'double': 'Double.parseDouble(value)',
+            'byte': 'Byte.parseByte(value)',
+            'short': 'Short.parseShort(value)',
+        }
+        
+        # 列表元素基础类型解析（使用 v 变量）
+        element_parsers = {
+            'string': 'v.replace("\\"", "")',
+            'int': 'Integer.parseInt(v)',
+            'long': 'Long.parseLong(v)',
+            'bool': 'Boolean.parseBoolean(v)',
+            'float': 'Float.parseFloat(v)',
+            'double': 'Double.parseDouble(v)',
+            'byte': 'Byte.parseByte(v)',
+            'short': 'Short.parseShort(v)',
+        }
+
+        # 如果有容器类型，生成容器解析代码
+        if container_type:
+            container = container_type.lower()
+            if container in ('list', 'array'):
+                element_type = type_str
+                # 实体类型（含 _）使用 fromJson 解析
+                if '_' in element_type:
+                    class_name = self.to_class_name(element_type)
+                    element_parser = f'{class_name}.fromJson(v)'
+                else:
+                    element_parser = element_parsers.get(element_type, 'v.replace("\\"", "")')
+                return f'com.pocrd.clientsdk.JsonUtil.parseList(value, v -> {element_parser})'
+            elif container == 'set':
+                element_type = type_str
+                # 实体类型（含 _）使用 fromJson 解析
+                if '_' in element_type:
+                    class_name = self.to_class_name(element_type)
+                    element_parser = f'{class_name}.fromJson(v)'
+                else:
+                    element_parser = element_parsers.get(element_type, 'v.replace("\\"", "")')
+                return f'new java.util.HashSet<>(com.pocrd.clientsdk.JsonUtil.parseList(value, v -> {element_parser}))'
+
+        # 实体类型（含 _）
+        if '_' in type_str:
+            class_name = self.to_class_name(type_str)
+            return f'{class_name}.fromJson(value)'
+
+        return single_parsers.get(type_str, 'null /* unsupported type */')
     
     def generate_entities(self, service_data: Dict[str, Any], package_prefix: str = None) -> List[Path]:
         """
@@ -394,6 +523,11 @@ class JavaCodeGenerator:
                 self.to_java_type(f.get('type', ''), f.get('containerType')).startswith('Set<')
                 for f in fields
             )
+            # 检查是否包含嵌套实体类（类型含 '_'）
+            has_nested_entity = any(
+                '_' in f.get('type', '')
+                for f in fields
+            )
 
             # 构建实体数据
             entity_data = {
@@ -405,6 +539,7 @@ class JavaCodeGenerator:
                 'original_type': entity_key,
                 'has_list': has_list,
                 'has_set': has_set,
+                'has_nested_entity': has_nested_entity,
             }
             
             # 渲染模板
@@ -561,6 +696,7 @@ class JavaCodeGenerator:
         template = self.env.get_template('apimethod.java.j2')
         api_group = service_data.get('apiGroup', {})
         service_name = api_group.get('name', 'UnknownService')
+        interface_name = service_data.get('interfaceName', '')
         
         # 收集需要导入的实体类
         base_imports = set()
@@ -589,27 +725,48 @@ class JavaCodeGenerator:
             
             # 处理返回类型
             return_type = method.get('returnType', '')
-            if return_type and return_type not in self.TYPE_MAPPING:
+            normalized_return = self._normalize_type(return_type.replace(';', '')) if return_type else ''
+            if return_type and normalized_return not in self.TYPE_MAPPING.values():
                 if '_' in return_type:
                     entity_class = self.to_class_name(return_type.replace(';', ''))
                     imports.add(f'{package_prefix}.entity.{entity_class}')
             
-            # 处理参数类型
-            for param in method.get('parameters', []):
+            # 过滤掉 StreamObserver 类型的参数（这是服务端回调，不应暴露给客户端）
+            stream_params = [p for p in method.get('parameters', []) 
+                           if p.get('containerType') == 'StreamObserver']
+            normal_params = [p for p in method.get('parameters', []) 
+                           if p.get('containerType') != 'StreamObserver']
+            
+            # 处理参数类型（只处理非 StreamObserver 参数）
+            for param in normal_params:
                 param_type = param.get('type', '')
-                if param_type and param_type not in self.TYPE_MAPPING:
+                normalized_type = self._normalize_type(param_type)
+                if param_type and normalized_type not in self.TYPE_MAPPING.values():
                     if '_' in param_type:
                         entity_class = self.to_class_name(param_type)
                         imports.add(f'{package_prefix}.entity.{entity_class}')
             
+            # 判断是否为流式接口
+            is_stream = len(stream_params) > 0
+            
+            # 判断是否为 POST（有普通参数就用 POST）
+            is_post = len(normal_params) > 0
+            
+            # 更新 method 数据，移除 StreamObserver 参数
+            method = dict(method)
+            method['parameters'] = normal_params
+
             # 构建方法数据
             method_data = {
                 'package': f'{package_prefix}.api',
                 'service_name': service_name,
+                'interface_name': interface_name,
                 'class_name': class_name,
                 'method': method,
                 'imports': sorted(imports),
                 'code_define': code_define,
+                'is_post': is_post,
+                'is_stream': is_stream,
             }
             
             # 渲染模板
@@ -636,7 +793,7 @@ class JavaCodeGenerator:
         package_path = base_package.replace('.', '/')
         
         # 基础类文件列表
-        base_classes = ['ReturnCode.java', 'ApiMethod.java']
+        base_classes = ['ReturnCode.java', 'ApiMethod.java', 'JsonUtil.java']
         found_files = []
         
         for class_file in base_classes:

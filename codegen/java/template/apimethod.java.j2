@@ -19,15 +19,14 @@ import java.util.Set;
  */
 public final class {{ class_name }} extends ApiMethod<{{ method.returnType | to_java_type | to_wrapper_type }}> {
 
-    /**
-     * 方法名
-     */
+    /** 方法名 */
     public static final String METHOD_NAME = "{{ method.name }}";
 
-    /**
-     * 服务名
-     */
+    /** 服务名 */
     public static final String SERVICE_NAME = "{{ service_name }}";
+
+    /** 接口全限定名（用于构建请求 URL） */
+    public static final String INTERFACE_NAME = "{{ interface_name }}";
 
 {% set required_params = method.parameters | selectattr('required', 'equalto', true) | list %}
 {% set optional_params = method.parameters | rejectattr('required', 'equalto', true) | list %}
@@ -83,8 +82,39 @@ public final class {{ class_name }} extends ApiMethod<{{ method.returnType | to_
     }
 
     @Override
+    public String getInterfaceName() {
+        return INTERFACE_NAME;
+    }
+
+    @Override
     @SuppressWarnings("unchecked")
     public Class<{{ method.returnType | to_java_type | to_wrapper_type }}> getReturnType() {
         return (Class<{{ method.returnType | to_java_type | to_wrapper_type }}>) (Class<?>) {{ method.returnType | to_java_type | to_wrapper_type }}.class;
+    }
+
+    @Override
+    public boolean isPost() {
+        return {{ is_post | lower }};
+    }
+
+    @Override
+    public String buildRequestBody() {
+{% if method.parameters | length == 0 %}
+        return "";
+{% elif method.parameters | length == 1 and method.parameters[0].type | to_java_type is entity_type %}
+        // 单实体参数，直接调用实体的 toJson() 方法
+        return {{ method.parameters[0].name }}.toJson();
+{% else %}
+        // 多参数或基础类型，封装为 JSON 对象
+        StringBuilder sb = new StringBuilder("{");
+{% for param in method.parameters %}
+        sb.append("\"{{ param.name }}\":").append(com.pocrd.clientsdk.JsonUtil.toJson({{ param.name }}));
+{% if not loop.last %}
+        sb.append(",");
+{% endif %}
+{% endfor %}
+        sb.append("}");
+        return sb.toString();
+{% endif %}
     }
 }

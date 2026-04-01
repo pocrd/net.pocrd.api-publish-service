@@ -225,6 +225,7 @@ public class ApiMetadataObjectMapper {
      * 规则：
      * - 省略 null 字段
      * - returnType 简化类型名
+     * - returnContainerType 为 null 时省略
      */
     private static class MethodDefinitionSerializer extends JsonSerializer<MethodDefinition> {
         @Override
@@ -237,6 +238,11 @@ public class ApiMetadataObjectMapper {
             
             // returnType: 简化类型名
             gen.writeStringField("returnType", ApiMetadataValidator.simplifyType(value.returnType()));
+            
+            // returnContainerType: 非 null 时输出
+            if (value.returnContainerType() != null) {
+                gen.writeStringField("returnContainerType", ApiMetadataValidator.simplifyType(value.returnContainerType()));
+            }
             
             // description: 非 null 时输出
             if (value.description() != null) {

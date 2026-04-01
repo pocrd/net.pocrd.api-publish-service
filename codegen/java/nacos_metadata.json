@@ -20,11 +20,6 @@
               "code": 1002,
               "desc": "问候名称包含非法字符",
               "name": "GREET_NAME_CONTAINS_INVALID_CHAR"
-            },
-            {
-              "code": 1003,
-              "desc": "批量问候数量超过限制",
-              "name": "BATCH_SIZE_EXCEEDED"
             }
           ]
         }
@@ -58,6 +53,26 @@
           ]
         },
         {
+          "name": "greet",
+          "returnType": "string",
+          "description": "简单问候接口",
+          "errorCodes": [
+            1001,
+            1002
+          ],
+          "parameters": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "verifyRegex": "(?i).*(abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz).*",
+              "verifyMsg": "名称必须包含三个连续字母（如 abc, xyz）",
+              "desc": "问候对象名称，必须包含三个连续字母（如 abc, xyz）",
+              "exampleValue": "AxyzB"
+            }
+          ]
+        },
+        {
           "name": "greetStream",
           "returnType": "void",
           "description": "流式问候接口",
@@ -79,26 +94,6 @@
               "containerType": "StreamObserver",
               "required": true,
               "desc": "流式响应观察者"
-            }
-          ]
-        },
-        {
-          "name": "greet",
-          "returnType": "string",
-          "description": "简单问候接口",
-          "errorCodes": [
-            1001,
-            1002
-          ],
-          "parameters": [
-            {
-              "name": "name",
-              "type": "string",
-              "required": true,
-              "verifyRegex": "(?i).*(abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz).*",
-              "verifyMsg": "名称必须包含三个连续字母（如 abc, xyz）",
-              "desc": "问候对象名称，必须包含三个连续字母（如 abc, xyz）",
-              "exampleValue": "AxyzB"
             }
           ]
         }
@@ -213,27 +208,6 @@
           ]
         }
       },
-      "errorCodes": [
-        {
-          "codes": [
-            {
-              "code": 200002,
-              "desc": "记录不存在",
-              "name": "NOT_FOUND"
-            },
-            {
-              "code": 200001,
-              "desc": "参数错误",
-              "name": "PARAM_ERROR"
-            },
-            {
-              "code": 200000,
-              "desc": "未知错误",
-              "name": "UNKNOWN_ERROR"
-            }
-          ]
-        }
-      ],
       "group": "public",
       "interfaceName": "com.pocrd.dubbo_demo.api.CRUDServiceHttpExport",
       "methods": [
@@ -291,7 +265,8 @@
         },
         {
           "name": "getAllUsers",
-          "returnType": "list",
+          "returnType": "DubboDemo_User",
+          "returnContainerType": "list",
           "description": "获取所有用户列表"
         },
         {
@@ -348,7 +323,8 @@
         },
         {
           "name": "getAllProducts",
-          "returnType": "list",
+          "returnType": "DubboDemo_Product",
+          "returnContainerType": "list",
           "description": "获取所有产品列表"
         },
         {
@@ -405,7 +381,8 @@
         },
         {
           "name": "getAllOrders",
-          "returnType": "list",
+          "returnType": "DubboDemo_Order",
+          "returnContainerType": "list",
           "description": "获取所有订单列表"
         }
       ],
@@ -419,22 +396,6 @@
         "name": "GreeterService"
       },
       "description": "Greeter服务，提供问候功能",
-      "errorCodes": [
-        {
-          "codes": [
-            {
-              "code": 100001,
-              "desc": "参数错误",
-              "name": "PARAM_ERROR"
-            },
-            {
-              "code": 100000,
-              "desc": "未知错误",
-              "name": "UNKNOWN_ERROR"
-            }
-          ]
-        }
-      ],
       "group": "public",
       "interfaceName": "com.pocrd.dubbo_demo.api.GreeterServiceHttpExport",
       "methods": [
@@ -770,7 +731,8 @@
         },
         {
           "name": "testListParam",
-          "returnType": "list",
+          "returnType": "string",
+          "returnContainerType": "list",
           "description": "List参数测试",
           "errorCodes": [
             2001
@@ -787,7 +749,8 @@
         },
         {
           "name": "testArrayParam",
-          "returnType": "ApiPublish_String;",
+          "returnType": "string",
+          "returnContainerType": "list",
           "description": "数组参数测试",
           "errorCodes": [
             2001
@@ -804,7 +767,8 @@
         },
         {
           "name": "testReturnList",
-          "returnType": "list",
+          "returnType": "ApiPublish_UserInfo",
+          "returnContainerType": "list",
           "description": "返回List测试",
           "parameters": [
             {
@@ -817,7 +781,8 @@
         },
         {
           "name": "testReturnArray",
-          "returnType": "ApiPublish_OrderItem;",
+          "returnType": "ApiPublish_OrderItem",
+          "returnContainerType": "list",
           "description": "返回数组测试",
           "parameters": [
             {
@@ -881,7 +846,8 @@
         },
         {
           "name": "testPageQuery",
-          "returnType": "list",
+          "returnType": "ApiPublish_UserInfo",
+          "returnContainerType": "list",
           "description": "分页查询测试",
           "errorCodes": [
             2001
@@ -905,7 +871,8 @@
         },
         {
           "name": "testPageWithNestedEntity",
-          "returnType": "list",
+          "returnType": "ApiPublish_OrderInfo",
+          "returnContainerType": "list",
           "description": "分页返回嵌套实体测试",
           "parameters": [
             {
@@ -1076,7 +1043,8 @@
         },
         {
           "name": "testSetParam",
-          "returnType": "set",
+          "returnType": "string",
+          "returnContainerType": "set",
           "description": "Set参数测试",
           "errorCodes": [
             2001
@@ -1093,7 +1061,8 @@
         },
         {
           "name": "testSetEntityReturn",
-          "returnType": "set",
+          "returnType": "ApiPublish_UserInfo",
+          "returnContainerType": "set",
           "description": "Set实体类型返回测试",
           "parameters": [
             {
@@ -1297,11 +1266,6 @@
               "name": "GREET_NAME_TOO_LONG"
             },
             {
-              "code": 1002,
-              "desc": "问候名称包含非法字符",
-              "name": "GREET_NAME_CONTAINS_INVALID_CHAR"
-            },
-            {
               "code": 1003,
               "desc": "批量问候数量超过限制",
               "name": "BATCH_SIZE_EXCEEDED"
@@ -1336,7 +1300,8 @@
         },
         {
           "name": "greetBatch",
-          "returnType": "list",
+          "returnType": "string",
+          "returnContainerType": "list",
           "description": "内部批量问候接口",
           "errorCodes": [
             1003

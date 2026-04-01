@@ -251,7 +251,7 @@ public class ApiMetadataValidator {
 
         // 提取错误码
         Set<Integer> allErrorCodes = new HashSet<>();
-        List<ErrorCodeInfo> errorCodes = extractErrorCodes(apiGroup.codeDefine(), allErrorCodes);
+        List<ErrorCodeInfo> allErrorCodeInfos = extractErrorCodes(apiGroup.codeDefine(), allErrorCodes);
 
         // 收集实体类型
         Set<Class<?>> entityTypes = new HashSet<>();
@@ -263,6 +263,20 @@ public class ApiMetadataValidator {
                 methods.add(methodDef);
             }
         }
+
+        // 收集实际使用的错误码
+        Set<Integer> usedErrorCodes = new HashSet<>();
+        for (MethodDefinition method : methods) {
+            int[] methodErrorCodes = method.errorCodes();
+            if (methodErrorCodes != null) {
+                for (int code : methodErrorCodes) {
+                    usedErrorCodes.add(code);
+                }
+            }
+        }
+
+        // 过滤错误码，只保留实际使用的
+        List<ErrorCodeInfo> errorCodes = filterUsedErrorCodes(allErrorCodeInfos, usedErrorCodes);
 
         // 收集实体定义
         Map<String, EntityDefinition> entities = collectEntityDefinitions(entityTypes);
@@ -344,8 +358,10 @@ public class ApiMetadataValidator {
                                                     Class<? extends AbstractReturnCode> codeDefineClass) {
         String methodName = method.getName();
         scanStack.push(ScanFrame.ofMethod(scanStack.peek().interfaceName, methodName));
-        
+
         Class<?> returnType = method.getReturnType();
+        String returnContainerType = null;
+        String returnTypeName;
 
         // 检查返回类型（包括数组，统一视为 List 处理）
         scanStack.push(ScanFrame.ofMethodReturn(scanStack.peek().interfaceName, methodName));
@@ -354,24 +370,35 @@ public class ApiMetadataValidator {
             // 数组返回类型统一视为 List
             Class<?> compType = returnType.getComponentType();
             checkTypeArgument(compType, entityTypes);
+            returnTypeName = compType.getName();
+            returnContainerType = "java.util.List";
         } else if (genericReturnType instanceof java.lang.reflect.ParameterizedType parameterizedType) {
             Class<?> rawType = (Class<?>) parameterizedType.getRawType();
             if (!CONTAINER_WHITELIST.contains(rawType.getName())) {
                 addError(ValidationError.ErrorType.UNSUPPORTED_CONTAINER,
                     "不支持的容器类型: " + rawType.getName());
+                returnTypeName = returnType.getName();
             } else {
                 // 检查泛型参数
                 java.lang.reflect.Type[] typeArguments = parameterizedType.getActualTypeArguments();
-                if (typeArguments.length > 0) {
+                if (typeArguments.length == 1) {
                     checkTypeArgument(typeArguments[0], entityTypes);
+                    returnTypeName = typeArguments[0].getTypeName();
+                } else {
+                    addError(ValidationError.ErrorType.UNSUPPORTED_TYPE,
+                        "不支持的泛型返回类型: " + genericReturnType.getTypeName() + "，请使用具体类型");
+                    returnTypeName = returnType.getName();
                 }
+                returnContainerType = rawType.getName();
             }
         } else if (genericReturnType instanceof java.lang.reflect.TypeVariable) {
             // 泛型类型变量（如 <T> T）
             addError(ValidationError.ErrorType.UNSUPPORTED_TYPE,
                 "不支持的泛型返回类型: " + genericReturnType.getTypeName() + "，请使用具体类型");
+            returnTypeName = returnType.getName();
         } else {
             checkType(returnType, entityTypes);
+            returnTypeName = returnType.getName();
         }
         scanStack.pop();
 
@@ -409,7 +436,7 @@ public class ApiMetadataValidator {
         }
         
         scanStack.pop();
-        return new MethodDefinition(methodName, returnType.getName(), description, errorCodes, params);
+        return new MethodDefinition(methodName, returnTypeName, returnContainerType, description, errorCodes, params);
     }
 
     /**
@@ -759,6 +786,37 @@ public class ApiMetadataValidator {
     }
 
     /**
+     * 过滤错误码，只保留实际使用的错误码
+     */
+    private List<ErrorCodeInfo> filterUsedErrorCodes(List<ErrorCodeInfo> allErrorCodeInfos,
+                                                      Set<Integer> usedErrorCodes) {
+        if (allErrorCodeInfos == null || allErrorCodeInfos.isEmpty()) {
+            return null;
+        }
+        if (usedErrorCodes == null || usedErrorCodes.isEmpty()) {
+            return null;
+        }
+
+        List<ErrorCodeInfo> result = new ArrayList<>();
+        for (ErrorCodeInfo errorCodeInfo : allErrorCodeInfos) {
+            if (errorCodeInfo.codes() == null || errorCodeInfo.codes().isEmpty()) {
+                continue;
+            }
+            List<ErrorCodeInfo.ErrorCodeItem> filteredCodes = new ArrayList<>();
+            for (ErrorCodeInfo.ErrorCodeItem codeItem : errorCodeInfo.codes()) {
+                if (usedErrorCodes.contains(codeItem.code())) {
+                    filteredCodes.add(codeItem);
+                }
+            }
+            if (!filteredCodes.isEmpty()) {
+                result.add(new ErrorCodeInfo(filteredCodes));
+            }
+        }
+
+        return result.isEmpty() ? null : result;
+    }
+
+    /**
      * 简化类型名称（使用默认服务ID前缀）
      */
     public static String simplifyType(String typeName) {
@@ -776,6 +834,11 @@ public class ApiMetadataValidator {
             return TYPE_MAPPING.get(typeName);
         }
         String simpleName = typeName.substring(typeName.lastIndexOf('.') + 1);
+        // 检查简化后的名称是否也是基础类型（如 "String" -> "string"）
+        String fullTypeName = "java.lang." + simpleName;
+        if (TYPE_MAPPING.containsKey(fullTypeName)) {
+            return TYPE_MAPPING.get(fullTypeName);
+        }
         return serviceIdPrefix + "_" + simpleName;
     }
 

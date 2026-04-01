@@ -14,6 +14,7 @@ import java.util.List;
 public record MethodDefinition(
     String name,
     String returnType,
+    String returnContainerType,
     String description,
     int[] errorCodes,
     List<ParameterDefinition> parameters

@@ -13,12 +13,90 @@ import java.util.Set;
  */
 public record {{ class_name }}(
 {% for field in fields %}
-    /**
-     * {{ field.desc | default('') }}
-     */
+    /** {{ field.desc | default('') }} */
     {{ field.type | to_java_type(field.containerType) }} {{ field.name }}{% if not loop.last %},{% endif %}
 
 {% endfor %}
 ) implements Serializable {
     private static final long serialVersionUID = 1L;
+
+    /**
+     * 将当前实体序列化为 JSON 字符串
+     * <p>
+     * 空值字段会被跳过，不输出到 JSON。
+     */
+    public String toJson() {
+{% if has_nested_entity %}
+        // 检测循环引用
+        if (com.pocrd.clientsdk.JsonUtil.isSerializing(this)) {
+            return "";
+        }
+        com.pocrd.clientsdk.JsonUtil.beginSerialize(this);
+        try {
+{% endif %}
+            StringBuilder sb = new StringBuilder("{");
+            boolean first = true;
+{% for field in fields %}
+{% if field.type is primitive_type %}
+            // {{ field.name }}: 基础类型，直接输出
+            if (!first) sb.append(",");
+            sb.append("\"{{ field.name }}\":").append({{ field.name | to_json_value(field.type, field.containerType) }});
+            first = false;
+{% else %}
+            // {{ field.name }}: 对象类型，需要判空
+            if ({{ field.name }} != null) {
+                if (!first) sb.append(",");
+                sb.append("\"{{ field.name }}\":").append({{ field.name | to_json_value(field.type, field.containerType) }});
+                first = false;
+            }
+{% endif %}
+{% endfor %}
+            sb.append("}");
+            return sb.toString();
+{% if has_nested_entity %}
+        } finally {
+            com.pocrd.clientsdk.JsonUtil.endSerialize(this);
+        }
+{% endif %}
+    }
+
+    /**
+     * 从 JSON 字符串反序列化为实体对象
+     * <p>
+     * 简单实现：按字段顺序解析，不支持嵌套实体和复杂类型
+     */
+    public static {{ class_name }} fromJson(String json) {
+        if (json == null || json.isEmpty() || json.equals("null")) {
+            return null;
+        }
+        // 去掉首尾 {}
+        String content = json.trim();
+        if (content.startsWith("{")) content = content.substring(1);
+        if (content.endsWith("}")) content = content.substring(0, content.length() - 1);
+
+{% for field in fields %}
+        {{ field.type | to_java_type(field.containerType) }} {{ field.name }} = {{ field.type | default_value(field.containerType) }};
+{% endfor %}
+
+        // 简单解析：按逗号分割字段
+        String[] pairs = content.split(",");
+        for (String pair : pairs) {
+            int colonIdx = pair.indexOf(':');
+            if (colonIdx < 0) continue;
+            String key = pair.substring(0, colonIdx).trim().replace("\"", "");
+            String value = pair.substring(colonIdx + 1).trim();
+
+{% for field in fields %}
+{% if loop.first %}
+            if ("{{ field.name }}".equals(key)) {
+{% else %}
+            } else if ("{{ field.name }}".equals(key)) {
+{% endif %}
+                {{ field.name }} = {{ field.type | parse_json_value(field.containerType) }};
+{% endfor %}
+            }
+        }
+
+        return new {{ class_name }}({% for field in fields %}{{ field.name }}{% if not loop.last %}, {% endif %}{% endfor %});
+    }
 }

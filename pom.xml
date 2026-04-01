@@ -18,7 +18,6 @@
         <module>api</module>
         <module>service</module>
         <module>client</module>
-        <module>codegen</module>
     </modules>
 
     <properties>
