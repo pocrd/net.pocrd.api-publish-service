@@ -37,31 +37,23 @@ cd "$SCRIPT_DIR"
 # 服务配置
 SERVICE_NAME="api-publish-service"
 COMPOSE_FILE="docker-compose.yml"
-COMPOSE_PROJECT_NAME="api-publish-service"
 
 # 强制模式标志（跳过 API 检查）
 FORCE_MODE=false
-
-# 加载环境变量文件
-load_env_file() {
-    local env_file=".env.${ENV}"
-    if [[ -f "$env_file" ]]; then
-        info "加载环境变量文件: $env_file"
-        # 使用 source 加载环境变量，并导出到当前 shell
-        set -a
-        source "$env_file"
-        set +a
-    else
-        error "环境变量文件不存在: $env_file"
-        exit 1
-    fi
-}
 
 # 验证环境参数
 validate_env() {
     case "$ENV" in
         prod|test)
-            load_env_file
+            if [[ ! -f "$COMPOSE_ENV_FILE" ]]; then
+                error "环境配置文件不存在: $COMPOSE_ENV_FILE"
+                exit 1
+            fi
+            if [[ ! -f ".env.${ENV}" ]]; then
+                error "环境变量文件不存在: .env.${ENV}"
+                error "请复制 .env.example 为 .env.${ENV} 并填写实际配置"
+                exit 1
+            fi
             info "使用环境: $ENV"
             ;;
         *)
@@ -127,7 +119,7 @@ check_env() {
 api_check() {
     info "检查 API 元数据..."
     
-    API_BASE_NAME="${SERVICE_NAME%-service}"
+    API_BASE_NAME="${SERVICE_NAME}"
     API_JAR_PATTERN="api/target/${API_BASE_NAME}-api-*.jar"
     API_JAR=$(ls $API_JAR_PATTERN 2>/dev/null | grep -v "sources" | grep -v "javadoc" | head -1)
     
@@ -193,7 +185,7 @@ build() {
 docker_build() {
     info "开始构建 Docker 镜像..."
     # 构建镜像，使用最新的 classes 和 lib
-    docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT_NAME" build
+    docker compose -f "$COMPOSE_FILE" build
     success "Docker 镜像构建完成"
 }
 
@@ -203,7 +195,7 @@ up() {
     # 动态获取宿主机IP并设置环境变量
     HOST_IP=$(get_host_ip)
     info "检测到宿主机IP: $HOST_IP"
-    DUBBO_IP_TO_REGISTRY="$HOST_IP" docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT_NAME" up -d 
+    DUBBO_IP_TO_REGISTRY="$HOST_IP" docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_ENV_FILE" up -d 
     success "服务已启动"
     info "等待服务初始化..."
     sleep 5
@@ -213,7 +205,7 @@ up() {
 # 停止服务
 down() {
     info "停止 Dubbo 服务..."
-    docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT_NAME" down
+    docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_ENV_FILE" down
     success "服务已停止"
 }
 
@@ -224,8 +216,8 @@ restart() {
     HOST_IP=$(get_host_ip)
     info "检测到宿主机IP: $HOST_IP"
     # 使用 down + up 重新加载环境变量配置
-    docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT_NAME" down
-    DUBBO_IP_TO_REGISTRY="$HOST_IP" docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT_NAME" up -d
+    docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_ENV_FILE" down
+    DUBBO_IP_TO_REGISTRY="$HOST_IP" docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_ENV_FILE" up -d
     success "服务已重启"
     info "等待服务初始化..."
     sleep 5
@@ -235,15 +227,15 @@ restart() {
 # 查看日志
 logs() {
     info "查看服务日志 (按 Ctrl+C 退出)..."
-    docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT_NAME" logs -f "$SERVICE_NAME"
+    docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_ENV_FILE" logs -f "$SERVICE_NAME"
 }
 
 # 查看状态
 status() {
     info "查看服务状态..."
-    docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT_NAME" ps
+    docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_ENV_FILE" ps
     
-    if docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT_NAME" ps | grep -q "Up"; then
+    if docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_ENV_FILE" ps | grep -q "Up"; then
         success "服务运行正常"
     else
         warn "服务可能未正常运行，请检查日志"
@@ -264,7 +256,7 @@ deploy() {
 clean() {
     info "清理构建产物..."
     mvn clean
-    docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT_NAME" down -v --rmi local 2>/dev/null || true
+    docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_ENV_FILE" down -v --rmi local 2>/dev/null || true
     success "清理完成"
 }
 
@@ -318,6 +310,9 @@ fi
 if [[ "$FORCE_ARG" == "-force" ]]; then
     FORCE_MODE=true
 fi
+
+# 设置环境配置文件
+COMPOSE_ENV_FILE="docker-compose.${ENV}.yml"
 
 # 验证环境
 validate_env

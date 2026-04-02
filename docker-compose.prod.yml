@@ -1,0 +1,8 @@
+# 生产环境 Docker Compose 配置
+# 使用方式: ./deploy.sh prod
+# 环境变量从 .env.prod 文件加载
+
+services:
+  dubbo-service:
+    env_file:
+      - .env.prod
