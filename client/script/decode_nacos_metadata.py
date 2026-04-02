@@ -10,7 +10,11 @@ import gzip
 import base64
 import urllib.parse
 import urllib.request
+import os
 from typing import Optional, Dict, Any, List, Tuple
+
+# 默认输出文件路径
+DEFAULT_OUTPUT_FILE = "../../codegen/nacos_metadata.json"
 
 # 颜色定义
 class Colors:
@@ -46,6 +50,17 @@ def decode_metadata(compressed_base64: str) -> Optional[Dict[str, Any]]:
     except Exception as e:
         print(f"{Colors.RED}解码失败：{e}{Colors.NC}", file=sys.stderr)
         return None
+
+
+def save_metadata_to_file(metadata: Dict[str, Any], output_file: str = DEFAULT_OUTPUT_FILE) -> bool:
+    """将元数据保存到 JSON 文件"""
+    try:
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"{Colors.RED}保存文件失败：{e}{Colors.NC}", file=sys.stderr)
+        return False
 
 def get_service_instances(nacos_url: str, service_name: str, group_name: str) -> List[Dict[str, Any]]:
     """获取服务的实例列表"""
@@ -141,57 +156,57 @@ def parse_service_info(data_id: str) -> Optional[Tuple[str, str, str]]:
     
     return (interface, version, group)
 
-def show_service_metadata(nacos_url: str, data_id: str, service_interface: str, version: str, group: str) -> bool:
-    """显示指定服务的元数据"""
+def show_service_metadata(nacos_url: str, data_id: str, service_interface: str, version: str, group: str) -> Optional[Dict[str, Any]]:
+    """显示指定服务的元数据，返回解码后的元数据（如果成功）"""
     print(f"\n{Colors.BLUE}{'='*60}{Colors.NC}")
     print(f"{Colors.BLUE}服务：{service_interface}{Colors.NC}")
     print(f"{Colors.BLUE}版本：{version}{Colors.NC}")
     print(f"{Colors.BLUE}分组：{group}{Colors.NC}")
     print(f"{Colors.BLUE}DataId：{data_id}{Colors.NC}")
     print(f"{Colors.BLUE}{'='*60}{Colors.NC}")
-    
+
     # 获取配置
     config = get_config(nacos_url, data_id, "dubbo")
-    
+
     if config is None:
-        return False
-    
+        return None
+
     # 提取 parameters 字段中的 api.metadata（SDK 增强的元数据）
     parameters = config.get('parameters', {})
     compressed_data = parameters.get('api.metadata', '')
-    
+
     if not compressed_data:
         # 尝试旧版本的字段名
         compressed_data = parameters.get('api.publish.service.metadata', '')
-    
+
     if not compressed_data:
         print(f"{Colors.YELLOW}⚠ 未找到 'api.metadata' 字段（可能是 Dubbo 框架服务或无 SDK 注解）{Colors.NC}")
-        return False
-    
+        return None
+
     print(f"{Colors.YELLOW}压缩的元数据大小：{len(compressed_data)} bytes{Colors.NC}")
     print(f"\n{Colors.GREEN}解码后的元数据：{Colors.NC}\n")
-    
+
     # 解码并格式化输出
     metadata = decode_metadata(compressed_data)
-    
+
     if metadata:
         print(json.dumps(metadata, indent=2, ensure_ascii=False))
-        
+
         # 打印摘要信息
         print(f"\n{Colors.YELLOW}摘要：{Colors.NC}")
         services = metadata.get('services', [])
         entities = metadata.get('entities', {})
         error_codes = metadata.get('errorCodes', [])
-        
+
         if services:
             print(f"  - 服务数量：{len(services)}")
             for svc in services:
                 methods = svc.get('methods', [])
                 print(f"    - {svc.get('interfaceName', 'Unknown')}: {len(methods)} 个方法")
-        
+
         if entities:
             print(f"  - 实体类型数量：{len(entities)}")
-        
+
         if error_codes:
             total_codes = sum(len(ec.get('codes', [])) for ec in error_codes)
             print(f"  - 错误码数量：{total_codes}")
@@ -200,10 +215,10 @@ def show_service_metadata(nacos_url: str, data_id: str, service_interface: str, 
                     print(f"      {code['code']}: {code['name']} - {code['desc']}")
                 if len(ec.get('codes', [])) > 3:
                     print(f"      ... 还有 {len(ec.get('codes', [])) - 3} 个错误码")
-        
-        return True
+
+        return metadata
     else:
-        return False
+        return None
 
 def list_nacos_services(nacos_url: str, group_name: str = "PUBLIC-GROUP") -> List[Dict[str, Any]]:
     """从 Nacos 获取服务列表"""
@@ -382,19 +397,43 @@ def show_all_dubbo_metadata(nacos_url: str):
     print(f"{Colors.BLUE}{'='*60}{Colors.NC}\n")
     
     # 第三步：解码并显示业务服务元数据
+    all_metadata = []
     if business_services:
         print(f"{Colors.YELLOW}步骤 3/3: 解码业务服务接口元数据...{Colors.NC}")
-        
+
         success_count = 0
         for svc in business_services:
             info = svc['dubbo_info']
-            if show_service_metadata(nacos_url, svc['data_id'], info['interface'], 
-                                     info['version'], info['group']):
+            metadata = show_service_metadata(nacos_url, svc['data_id'], info['interface'],
+                                     info['version'], info['group'])
+            if metadata:
                 success_count += 1
-        
+                # 添加服务标识信息到元数据
+                metadata_with_info = {
+                    'serviceInterface': info['interface'],
+                    'version': info['version'],
+                    'group': info['group'],
+                    'dataId': svc['data_id'],
+                    'metadata': metadata
+                }
+                all_metadata.append(metadata_with_info)
+
         print(f"\n{Colors.BLUE}{'='*60}{Colors.NC}")
         print(f"{Colors.BLUE}业务服务总计：{len(business_services)} 个，成功解码 {success_count} 个{Colors.NC}")
         print(f"{Colors.BLUE}{'='*60}{Colors.NC}")
+
+        # 保存所有元数据到文件
+        if all_metadata:
+            output_data = {
+                'source': 'nacos',
+                'nacosUrl': nacos_url,
+                'totalServices': len(business_services),
+                'successCount': success_count,
+                'services': all_metadata
+            }
+            if save_metadata_to_file(output_data, DEFAULT_OUTPUT_FILE):
+                output_path = os.path.abspath(DEFAULT_OUTPUT_FILE)
+                print(f"\n{Colors.GREEN}✓ 元数据已保存到：{output_path}{Colors.NC}")
     
     # 再显示框架服务（可选，带过滤）
     if framework_services:
@@ -421,7 +460,22 @@ def show_single_service(nacos_url: str, service_interface: str, version: str, gr
     else:
         version_with_md5 = version
     data_id = f"{group}-{service_interface}:{version}:{version_with_md5}:{group}:provider:api-publish-service"
-    show_service_metadata(nacos_url, data_id, service_interface, version, group)
+    metadata = show_service_metadata(nacos_url, data_id, service_interface, version, group)
+
+    # 保存单个服务的元数据到文件
+    if metadata:
+        output_data = {
+            'source': 'nacos',
+            'nacosUrl': nacos_url,
+            'serviceInterface': service_interface,
+            'version': version,
+            'group': group,
+            'dataId': data_id,
+            'metadata': metadata
+        }
+        if save_metadata_to_file(output_data, DEFAULT_OUTPUT_FILE):
+            output_path = os.path.abspath(DEFAULT_OUTPUT_FILE)
+            print(f"\n{Colors.GREEN}✓ 元数据已保存到：{output_path}{Colors.NC}")
 
 def main():
     # 解析命令行参数

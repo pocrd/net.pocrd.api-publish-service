@@ -1,0 +1,358 @@
+{
+  "services": [
+    {
+      "apiGroup": {
+        "codeDefine": "ErrorCode",
+        "maxCode": 209999,
+        "minCode": 200000,
+        "name": "CRUDService"
+      },
+      "description": "CRUD服务，提供用户、产品、订单的增删改查操作",
+      "entities": {
+        "DubboDemo_Order": {
+          "type": "DubboDemo_Order",
+          "isRecord": true,
+          "fields": [
+            {
+              "name": "id",
+              "type": "long",
+              "desc": "订单ID"
+            },
+            {
+              "name": "orderNo",
+              "type": "string",
+              "desc": "订单编号"
+            },
+            {
+              "name": "userId",
+              "type": "long",
+              "desc": "用户ID"
+            },
+            {
+              "name": "amount",
+              "type": "int",
+              "desc": "订单金额"
+            },
+            {
+              "name": "status",
+              "type": "int",
+              "desc": "订单状态"
+            },
+            {
+              "name": "remark",
+              "type": "string",
+              "desc": "备注"
+            }
+          ]
+        },
+        "DubboDemo_Product": {
+          "type": "DubboDemo_Product",
+          "isRecord": true,
+          "fields": [
+            {
+              "name": "id",
+              "type": "long",
+              "desc": "产品ID"
+            },
+            {
+              "name": "productCode",
+              "type": "string",
+              "desc": "产品编码"
+            },
+            {
+              "name": "productName",
+              "type": "string",
+              "desc": "产品名称"
+            },
+            {
+              "name": "price",
+              "type": "int",
+              "desc": "价格"
+            },
+            {
+              "name": "stock",
+              "type": "int",
+              "desc": "库存"
+            },
+            {
+              "name": "category",
+              "type": "string",
+              "desc": "分类"
+            }
+          ]
+        },
+        "DubboDemo_User": {
+          "type": "DubboDemo_User",
+          "isRecord": true,
+          "fields": [
+            {
+              "name": "id",
+              "type": "long",
+              "desc": "用户ID"
+            },
+            {
+              "name": "username",
+              "type": "string",
+              "desc": "用户名"
+            },
+            {
+              "name": "email",
+              "type": "string",
+              "desc": "邮箱"
+            },
+            {
+              "name": "phone",
+              "type": "string",
+              "desc": "电话"
+            }
+          ]
+        }
+      },
+      "group": "public",
+      "interfaceName": "com.pocrd.dubbo_demo.api.CRUDServiceHttpExport",
+      "methods": [
+        {
+          "name": "createUser",
+          "returnType": "DubboDemo_User",
+          "description": "创建用户",
+          "parameters": [
+            {
+              "name": "user",
+              "type": "DubboDemo_User",
+              "required": true,
+              "desc": "用户信息"
+            }
+          ]
+        },
+        {
+          "name": "getUserById",
+          "returnType": "DubboDemo_User",
+          "description": "根据ID获取用户",
+          "parameters": [
+            {
+              "name": "id",
+              "type": "long",
+              "required": true,
+              "desc": "用户ID"
+            }
+          ]
+        },
+        {
+          "name": "updateUser",
+          "returnType": "DubboDemo_User",
+          "description": "更新用户信息",
+          "parameters": [
+            {
+              "name": "user",
+              "type": "DubboDemo_User",
+              "required": true,
+              "desc": "用户信息"
+            }
+          ]
+        },
+        {
+          "name": "deleteUser",
+          "returnType": "bool",
+          "description": "删除用户",
+          "parameters": [
+            {
+              "name": "id",
+              "type": "long",
+              "required": true,
+              "desc": "用户ID"
+            }
+          ]
+        },
+        {
+          "name": "getAllUsers",
+          "returnType": "DubboDemo_User",
+          "returnContainerType": "list",
+          "description": "获取所有用户列表"
+        },
+        {
+          "name": "createProduct",
+          "returnType": "DubboDemo_Product",
+          "description": "创建产品",
+          "parameters": [
+            {
+              "name": "product",
+              "type": "DubboDemo_Product",
+              "required": true,
+              "desc": "产品信息"
+            }
+          ]
+        },
+        {
+          "name": "getProductById",
+          "returnType": "DubboDemo_Product",
+          "description": "根据ID获取产品",
+          "parameters": [
+            {
+              "name": "id",
+              "type": "long",
+              "required": true,
+              "desc": "产品ID"
+            }
+          ]
+        },
+        {
+          "name": "updateProduct",
+          "returnType": "DubboDemo_Product",
+          "description": "更新产品信息",
+          "parameters": [
+            {
+              "name": "product",
+              "type": "DubboDemo_Product",
+              "required": true,
+              "desc": "产品信息"
+            }
+          ]
+        },
+        {
+          "name": "deleteProduct",
+          "returnType": "bool",
+          "description": "删除产品",
+          "parameters": [
+            {
+              "name": "id",
+              "type": "long",
+              "required": true,
+              "desc": "产品ID"
+            }
+          ]
+        },
+        {
+          "name": "getAllProducts",
+          "returnType": "DubboDemo_Product",
+          "returnContainerType": "list",
+          "description": "获取所有产品列表"
+        },
+        {
+          "name": "createOrder",
+          "returnType": "DubboDemo_Order",
+          "description": "创建订单",
+          "parameters": [
+            {
+              "name": "order",
+              "type": "DubboDemo_Order",
+              "required": true,
+              "desc": "订单信息"
+            }
+          ]
+        },
+        {
+          "name": "getOrderById",
+          "returnType": "DubboDemo_Order",
+          "description": "根据ID获取订单",
+          "parameters": [
+            {
+              "name": "id",
+              "type": "long",
+              "required": true,
+              "desc": "订单ID"
+            }
+          ]
+        },
+        {
+          "name": "updateOrder",
+          "returnType": "DubboDemo_Order",
+          "description": "更新订单信息",
+          "parameters": [
+            {
+              "name": "order",
+              "type": "DubboDemo_Order",
+              "required": true,
+              "desc": "订单信息"
+            }
+          ]
+        },
+        {
+          "name": "deleteOrder",
+          "returnType": "bool",
+          "description": "删除订单",
+          "parameters": [
+            {
+              "name": "id",
+              "type": "long",
+              "required": true,
+              "desc": "订单ID"
+            }
+          ]
+        },
+        {
+          "name": "getAllOrders",
+          "returnType": "DubboDemo_Order",
+          "returnContainerType": "list",
+          "description": "获取所有订单列表"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "apiGroup": {
+        "codeDefine": "GreeterErrorCode",
+        "maxCode": 109999,
+        "minCode": 100000,
+        "name": "GreeterService"
+      },
+      "description": "Greeter服务，提供问候功能",
+      "group": "public",
+      "interfaceName": "com.pocrd.dubbo_demo.api.GreeterServiceHttpExport",
+      "methods": [
+        {
+          "name": "greet",
+          "returnType": "string",
+          "description": "简单问候",
+          "parameters": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "desc": "姓名"
+            }
+          ]
+        },
+        {
+          "name": "greet2",
+          "returnType": "string",
+          "description": "双重问候",
+          "parameters": [
+            {
+              "name": "name1",
+              "type": "string",
+              "required": true,
+              "desc": "姓名1"
+            },
+            {
+              "name": "name2",
+              "type": "string",
+              "required": true,
+              "desc": "姓名2"
+            }
+          ]
+        },
+        {
+          "name": "greetStream",
+          "returnType": "void",
+          "description": "流式问候",
+          "parameters": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "desc": "姓名"
+            },
+            {
+              "name": "observer",
+              "type": "string",
+              "containerType": "StreamObserver",
+              "required": true,
+              "desc": "流观察者"
+            }
+          ]
+        }
+      ],
+      "version": "1.0.0"
+    }
+  ]
+}

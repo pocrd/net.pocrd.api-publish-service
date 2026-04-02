@@ -7,13 +7,11 @@ import static com.pocrd.api_publish_service.api.constant.TestServiceReturnCode.R
 import static com.pocrd.api_publish_service.api.constant.TestServiceReturnCode.OPERATION_FAILED_CODE;
 import static com.pocrd.api_publish_service.api.constant.TestServiceReturnCode.VALIDATION_ERROR_CODE;
 import com.pocrd.api_publish_service.api.entity.AddressInfo;
-import com.pocrd.api_publish_service.api.entity.ApiInfo;
 import com.pocrd.api_publish_service.api.entity.CircularEntityA;
 import com.pocrd.api_publish_service.api.entity.CircularEntityB;
 import com.pocrd.api_publish_service.api.entity.EnumFieldEntity;
 import com.pocrd.api_publish_service.api.entity.OrderInfo;
 import com.pocrd.api_publish_service.api.entity.OrderItem;
-import com.pocrd.api_publish_service.api.entity.ServiceInfo;
 
 import com.pocrd.api_publish_service.api.entity.UserInfo;
 import com.pocrd.api_publish_service.sdk.annotation.ApiGroup;
@@ -308,117 +306,5 @@ public interface ValidApiTestService {
     @DesignedErrorCode({INVALID_PARAMETER_CODE})
     EnumFieldEntity testEnumFieldEntity(
         @ApiParameter(name = "entity", required = true, desc = "枚举字段实体") EnumFieldEntity entity
-    );
-
-    // ==================== 复杂入参测试 ====================
-
-    /**
-     * 复杂多层嵌套实体入参测试
-     * 测试场景：实体中包含多层嵌套对象和集合
-     */
-    @Description("复杂多层嵌套实体入参测试")
-    @DesignedErrorCode({INVALID_PARAMETER_CODE, VALIDATION_ERROR_CODE})
-    ServiceInfo testComplexNestedEntityInput(
-        @ApiParameter(name = "serviceInfo", required = true, desc = "服务信息，包含嵌套API信息数组和错误码列表") ServiceInfo serviceInfo
-    );
-
-    /**
-     * 集合嵌套实体入参测试
-     * 测试场景：List参数中包含嵌套实体
-     */
-    @Description("集合嵌套实体入参测试")
-    @DesignedErrorCode({INVALID_PARAMETER_CODE, VALIDATION_ERROR_CODE})
-    int testListNestedEntityInput(
-        @ApiParameter(name = "orders", required = true, desc = "订单列表，每个订单包含买家和商品列表") List<OrderInfo> orders
-    );
-
-    /**
-     * 多参数复杂组合测试
-     * 测试场景：基本类型、实体、集合混合参数
-     */
-    @Description("多参数复杂组合测试")
-    @DesignedErrorCode({INVALID_PARAMETER_CODE, RESOURCE_NOT_FOUND_CODE, VALIDATION_ERROR_CODE})
-    String testComplexParamCombination(
-        @ApiParameter(name = "userId", required = true, desc = "用户ID") long userId,
-        @ApiParameter(name = "user", required = true, desc = "用户信息实体") UserInfo user,
-        @ApiParameter(name = "addresses", required = true, desc = "地址列表") List<AddressInfo> addresses,
-        @ApiParameter(name = "tags", required = true, desc = "标签集合") Set<String> tags,
-        @ApiParameter(name = "statusList", required = true, desc = "状态数组") String[] statusList,
-        @ApiParameter(name = "notify", required = false, desc = "是否通知", defaultValue = "true") boolean notify
-    );
-
-    /**
-     * 批量操作入参测试
-     * 测试场景：数组参数包含复杂实体
-     */
-    @Description("批量操作入参测试")
-    @DesignedErrorCode({INVALID_PARAMETER_CODE, OPERATION_FAILED_CODE})
-    int testBatchEntityArrayInput(
-        @ApiParameter(name = "items", required = true, desc = "订单项数组") OrderItem[] items
-    );
-
-    // ==================== 复杂返回值测试 ====================
-
-    /**
-     * 深层嵌套实体返回测试
-     * 测试场景：返回包含多层嵌套的复杂实体
-     */
-    @Description("深层嵌套实体返回测试")
-    @DesignedErrorCode({RESOURCE_NOT_FOUND_CODE})
-    ServiceInfo testDeepNestedEntityReturn(
-        @ApiParameter(name = "serviceName", required = true, desc = "服务名称") String serviceName
-    );
-
-    /**
-     * 分页嵌套实体返回测试
-     * 测试场景：返回包含嵌套实体的分页数据
-     */
-    @Description("分页嵌套实体返回测试")
-    @DesignedErrorCode({INVALID_PARAMETER_CODE})
-    List<OrderInfo> testPagedNestedEntityReturn(
-        @ApiParameter(name = "pageNum", required = true, desc = "页码") int pageNum,
-        @ApiParameter(name = "pageSize", required = true, desc = "每页大小") int pageSize
-    );
-
-    /**
-     * 复杂集合组合返回测试
-     * 测试场景：返回Set集合中包含嵌套实体
-     */
-    @Description("复杂集合组合返回测试")
-    @DesignedErrorCode({RESOURCE_NOT_FOUND_CODE})
-    Set<OrderInfo> testComplexSetEntityReturn(
-        @ApiParameter(name = "userIds", required = true, desc = "用户ID列表") List<Long> userIds
-    );
-
-    /**
-     * 分组订单项返回测试
-     * 测试场景：返回按分类分组的订单项Map结构（使用实体包装）
-     */
-    @Description("分组订单项返回测试")
-    @DesignedErrorCode({INVALID_PARAMETER_CODE})
-    OrderInfo testGroupedItemsReturn(
-        @ApiParameter(name = "categoryId", required = true, desc = "分类ID") long categoryId
-    );
-
-    /**
-     * 实体数组返回测试
-     * 测试场景：返回复杂实体数组
-     */
-    @Description("实体数组返回测试")
-    @DesignedErrorCode({RESOURCE_NOT_FOUND_CODE})
-    UserInfo[] testEntityArrayReturn(
-        @ApiParameter(name = "departmentId", required = true, desc = "部门ID") long departmentId
-    );
-
-    /**
-     * 综合复杂场景测试
-     * 测试场景：复杂入参 + 复杂返回值组合
-     */
-    @Description("综合复杂场景测试")
-    @DesignedErrorCode({INVALID_PARAMETER_CODE, RESOURCE_NOT_FOUND_CODE, OPERATION_FAILED_CODE, VALIDATION_ERROR_CODE})
-    ServiceInfo testComplexScenario(
-        @ApiParameter(name = "apiInfos", required = true, desc = "API信息列表") List<ApiInfo> apiInfos,
-        @ApiParameter(name = "config", required = true, desc = "地址配置信息") AddressInfo config,
-        @ApiParameter(name = "version", required = false, desc = "版本号", defaultValue = "1.0.0") String version
     );
 }

@@ -7,17 +7,19 @@ spring:
 dubbo:
   registry:
     empty-protection: true
+    simplified: true
   application:
     name: ${spring.application.name}
     # Enable QoS for management
     qos-enable: true
     qos-accept-foreign-ip: true
+    metadata-type: remote
   registries:
     nacos-internal:
-      address: nacos://host.docker.internal:30848
+      address: ${DUBBO_REGISTRY_ADDRESS:nacos://nacos-server:8848}
       group: INTERNAL-GROUP
     nacos-public:
-      address: nacos://host.docker.internal:30848
+      address: ${DUBBO_REGISTRY_ADDRESS:nacos://nacos-server:8848}
       # group 名称不要包含下划线，否则由于 DNS-1123 标签标准要求，在 higress 中会自动转换为短横线连接
       group: PUBLIC-GROUP
   protocols:
@@ -32,7 +34,10 @@ dubbo:
       serialization: fury
       registry-ids: nacos-internal
   metadata-report:
-    address: nacos://host.docker.internal:30848
+    address: ${DUBBO_METADATA_REPORT_ADDRESS:nacos://nacos-server:8848}
+  config-center:
+    address: ${DUBBO_CONFIG_CENTER:nacos://nacos-server:8848}
+
 
 # Logging configuration
 logging:

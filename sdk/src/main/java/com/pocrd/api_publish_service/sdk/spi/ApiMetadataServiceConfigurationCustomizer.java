@@ -200,6 +200,16 @@ public class ApiMetadataServiceConfigurationCustomizer implements ServiceInstanc
             // 直接压缩已生成的 JSON
             String compressedContent = compressAndEncode(jsonContent);
             
+            if (fullServiceDef.getMethods() != null) {
+                fullServiceDef.getMethods().clear(); 
+            }
+            if (fullServiceDef.getParameters() != null) {
+                fullServiceDef.getParameters().clear(); 
+            }
+            if (fullServiceDef.getTypes() != null) {
+                fullServiceDef.getTypes().clear(); 
+            }
+
             // 存入 FullServiceDefinition 的 parameters
             Map<String, String> parameters = fullServiceDef.getParameters();
             if (parameters == null) {
