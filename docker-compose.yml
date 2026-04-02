@@ -13,14 +13,13 @@ services:
     restart: unless-stopped
     volumes:
       - maven-repo:/root/.m2
-
-volumes:
-  maven-repo:
-    driver: local
-
     deploy:
       resources:
         limits:
           memory: 1G
         reservations:
           memory: 512M
+
+volumes:
+  maven-repo:
+    driver: local
