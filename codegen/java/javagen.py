@@ -74,8 +74,9 @@ class NacosMetadataFetcher:
                 metadata = instance.get('metadata', {})
                 for key, value in metadata.items():
                     if key.startswith('api.md5.'):
-                        interface = key.replace('api.md5.', '')
-                        api_md5_map[interface] = value
+                        # 格式: api.md5.{interface}:{version}
+                        interface_with_version = key.replace('api.md5.', '')
+                        api_md5_map[interface_with_version] = value
         except Exception:
             pass
         return api_md5_map
@@ -167,7 +168,8 @@ class NacosMetadataFetcher:
                 # 获取 api.md5
                 api_md5 = ''
                 if application in app_md5_map:
-                    api_md5 = app_md5_map[application].get(interface, '')
+                    key = f"{interface}:{version}"
+                    api_md5 = app_md5_map[application].get(key, '')
                 
                 if not api_md5:
                     continue

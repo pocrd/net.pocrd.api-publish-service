@@ -97,8 +97,8 @@ def extract_dubbo_info_from_instance(instance: Dict[str, Any]) -> Optional[Dict[
     if not all([interface, version, revision, application]):
         return None
     
-    # 提取 api.md5.{interface} 元数据（如果存在）
-    api_md5_key = f"api.md5.{interface}"
+    # 提取 api.md5.{interface}:{version} 元数据（如果存在）
+    api_md5_key = f"api.md5.{interface}:{version}"
     api_md5 = metadata.get(api_md5_key, '')
     
     return {
@@ -263,11 +263,12 @@ def collect_api_md5_from_service(nacos_url: str, service_name: str, group_name: 
         instances = get_service_instances(nacos_url, service_name, group_name)
         for instance in instances:
             metadata = instance.get('metadata', {})
-            # 提取所有 api.md5.{interface} 键
+            # 提取所有 api.md5.{interface}:{version} 键
             for key, value in metadata.items():
                 if key.startswith('api.md5.'):
-                    interface = key.replace('api.md5.', '')
-                    api_md5_map[interface] = value
+                    # 格式: api.md5.{interface}:{version}
+                    interface_with_version = key.replace('api.md5.', '')
+                    api_md5_map[interface_with_version] = value
     except Exception:
         pass
     
@@ -312,12 +313,14 @@ def collect_dubbo_services_from_instances(nacos_url: str, services: List[Dict[st
             dubbo_info = extract_dubbo_info_from_instance(instance)
             if dubbo_info:
                 interface = dubbo_info.get('interface', '')
+                version = dubbo_info.get('version', '')
                 
                 # 检查是否有对应的 api.md5（从应用级服务中获取）
                 application = dubbo_info.get('application', '')
                 api_md5 = ''
                 if application in app_service_md5:
-                    api_md5 = app_service_md5[application].get(interface, '')
+                    key = f"{interface}:{version}"
+                    api_md5 = app_service_md5[application].get(key, '')
                     
                 # 如果没有 api.md5，跳过该服务（只在有 api.md5 时才查询元数据）
                 if not api_md5:

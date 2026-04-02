@@ -89,7 +89,7 @@ public class ApiMetadataServiceConfigurationCustomizer implements ServiceInstanc
             
             // 2. 计算 MD5 并存入接口元数据
             String interfaceName = serviceDef.interfaceName();
-            String md5Key = METADATA_KEY_PREFIX + interfaceName;
+            String md5Key = METADATA_KEY_PREFIX + interfaceName + ":" + serviceDef.version();
             String metadataMd5 = calculateMd5FromJson(jsonContent);
             serviceInstance.getMetadata().put(md5Key, metadataMd5);
             logger.info("[METADATA] API metadata MD5 for {}: {}", interfaceName, metadataMd5);
@@ -185,7 +185,7 @@ public class ApiMetadataServiceConfigurationCustomizer implements ServiceInstanc
             
             // 从 ServiceDefinition 获取 version 和 group（已从 ProviderModel 传递过来）
             String version = serviceDef.version();
-            String group = serviceDef.group();
+            String group = serviceDef.apiGroup().name();
             
             // 构建 MetadataIdentifier
             // 使用 interfaceName 作为 serviceInterface
