@@ -8,9 +8,9 @@ services:
       - "50053:50053"
       - "50054:50054"
     environment:
-      - DUBBO_REGISTRY_ADDRESS=nacos://host.docker.internal:30848
-      - DUBBO_CONFIG_CENTER=nacos://host.docker.internal:30848
-      - DUBBO_METADATA_REPORT_ADDRESS=nacos://host.docker.internal:30848
+      - DUBBO_REGISTRY_ADDRESS=${DUBBO_REGISTRY_ADDRESS}
+      - DUBBO_CONFIG_CENTER=${DUBBO_CONFIG_CENTER}
+      - DUBBO_METADATA_REPORT_ADDRESS=${DUBBO_METADATA_REPORT_ADDRESS}
     networks:
       - higress_higress-net  # 连接到 Nacos 和 Higress 所在的网络
     restart: unless-stopped

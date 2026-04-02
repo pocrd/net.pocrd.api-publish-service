@@ -37,9 +37,53 @@ cd "$SCRIPT_DIR"
 # 服务配置
 SERVICE_NAME="api-publish-service"
 COMPOSE_FILE="docker-compose.yml"
+COMPOSE_PROJECT_NAME="api-publish-service"
 
 # 强制模式标志（跳过 API 检查）
 FORCE_MODE=false
+
+# 加载环境变量文件
+load_env_file() {
+    local env_file=".env.${ENV}"
+    if [[ -f "$env_file" ]]; then
+        info "加载环境变量文件: $env_file"
+        # 使用 source 加载环境变量，并导出到当前 shell
+        set -a
+        source "$env_file"
+        set +a
+    else
+        error "环境变量文件不存在: $env_file"
+        exit 1
+    fi
+}
+
+# 验证环境参数
+validate_env() {
+    case "$ENV" in
+        prod|test)
+            load_env_file
+            info "使用环境: $ENV"
+            ;;
+        *)
+            error "未知环境: $ENV"
+            error "支持的环境: prod, test"
+            exit 1
+            ;;
+    esac
+}
+
+# 获取宿主机IP地址
+get_host_ip() {
+    # macOS 和 Linux 兼容的方式获取IP
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS
+        ip=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "127.0.0.1")
+    else
+        # Linux
+        ip=$(hostname -I | awk '{print $1}' 2>/dev/null || ip route get 8.8.8.8 | awk '{print $7; exit}' 2>/dev/null || echo "127.0.0.1")
+    fi
+    echo "$ip"
+}
 
 # 打印信息
 info() {
@@ -83,8 +127,8 @@ check_env() {
 api_check() {
     info "检查 API 元数据..."
     
-    # 查找 api 模块的 jar 文件（使用 SERVICE_NAME 拼接，排除 sources 和 javadoc）
-    API_JAR_PATTERN="api/target/${SERVICE_NAME}-api-*.jar"
+    API_BASE_NAME="${SERVICE_NAME%-service}"
+    API_JAR_PATTERN="api/target/${API_BASE_NAME}-api-*.jar"
     API_JAR=$(ls $API_JAR_PATTERN 2>/dev/null | grep -v "sources" | grep -v "javadoc" | head -1)
     
     if [ -z "$API_JAR" ] || [ ! -f "$API_JAR" ]; then
@@ -138,12 +182,9 @@ api_check() {
 # 本地编译
 build() {
     info "开始 Maven 编译打包..."
-    # 先清理所有模块，确保 SDK 修改被正确编译
-    mvn clean -B -Dmaven.clean.failOnError=false
-    # 构建 service 模块及其依赖
-    mvn package -pl service -am -DskipTests -B
+    mvn clean package -pl service -am -DskipTests -B
     success "编译完成"
-    
+
     # 编译完成后检查 API 元数据
     api_check
 }
@@ -152,14 +193,17 @@ build() {
 docker_build() {
     info "开始构建 Docker 镜像..."
     # 构建镜像，使用最新的 classes 和 lib
-    docker-compose -f "$COMPOSE_FILE" build
+    docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT_NAME" build
     success "Docker 镜像构建完成"
 }
 
 # 启动服务
 up() {
     info "启动 Dubbo 服务..."
-    docker-compose -f "$COMPOSE_FILE" up -d
+    # 动态获取宿主机IP并设置环境变量
+    HOST_IP=$(get_host_ip)
+    info "检测到宿主机IP: $HOST_IP"
+    DUBBO_IP_TO_REGISTRY="$HOST_IP" docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT_NAME" up -d 
     success "服务已启动"
     info "等待服务初始化..."
     sleep 5
@@ -169,14 +213,19 @@ up() {
 # 停止服务
 down() {
     info "停止 Dubbo 服务..."
-    docker-compose -f "$COMPOSE_FILE" down
+    docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT_NAME" down
     success "服务已停止"
 }
 
 # 重启服务
 restart() {
     info "重启 Dubbo 服务..."
-    docker-compose -f "$COMPOSE_FILE" restart
+    # 动态获取宿主机IP并设置环境变量
+    HOST_IP=$(get_host_ip)
+    info "检测到宿主机IP: $HOST_IP"
+    # 使用 down + up 重新加载环境变量配置
+    docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT_NAME" down
+    DUBBO_IP_TO_REGISTRY="$HOST_IP" docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT_NAME" up -d
     success "服务已重启"
     info "等待服务初始化..."
     sleep 5
@@ -186,15 +235,15 @@ restart() {
 # 查看日志
 logs() {
     info "查看服务日志 (按 Ctrl+C 退出)..."
-    docker-compose -f "$COMPOSE_FILE" logs -f "$SERVICE_NAME"
+    docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT_NAME" logs -f "$SERVICE_NAME"
 }
 
 # 查看状态
 status() {
     info "查看服务状态..."
-    docker-compose -f "$COMPOSE_FILE" ps
+    docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT_NAME" ps
     
-    if docker-compose -f "$COMPOSE_FILE" ps | grep -q "Up"; then
+    if docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT_NAME" ps | grep -q "Up"; then
         success "服务运行正常"
     else
         warn "服务可能未正常运行，请检查日志"
@@ -215,7 +264,7 @@ deploy() {
 clean() {
     info "清理构建产物..."
     mvn clean
-    docker-compose -f "$COMPOSE_FILE" down -v --rmi local 2>/dev/null || true
+    docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT_NAME" down -v --rmi local 2>/dev/null || true
     success "清理完成"
 }
 
@@ -224,14 +273,15 @@ usage() {
     echo "Dubbo 微服务部署脚本"
     echo ""
     echo "Usage:"
-    echo "  ./deploy.sh [options] [command]"
+    echo "  ./deploy.sh [env] [command]"
+    echo "  ./deploy.sh [command]        # 默认使用 prod 环境"
     echo ""
-    echo "Options:"
-    echo "  -force      强制模式，跳过 API 元数据检查"
+    echo "Environments:"
+    echo "  prod        生产环境 (默认)"
+    echo "  test        测试环境"
     echo ""
     echo "Commands:"
     echo "  build       本地 Maven 编译打包"
-    echo "  api-check   检查 API 元数据（自动在 build 后执行）"
     echo "  docker      构建 Docker 镜像"
     echo "  up          启动服务"
     echo "  down        停止服务"
@@ -243,45 +293,36 @@ usage() {
     echo "  help        显示使用说明"
     echo ""
     echo "Examples:"
-    echo "  ./deploy.sh deploy              # 首次完整部署"
-    echo "  ./deploy.sh -force deploy       # 强制部署（跳过 API 检查）"
-    echo "  ./deploy.sh restart             # 修改代码后重启"
-    echo "  ./deploy.sh logs                # 查看运行日志"
+    echo "  ./deploy.sh prod deploy      # 生产环境完整部署"
+    echo "  ./deploy.sh test deploy      # 测试环境完整部署"
+    echo "  ./deploy.sh prod up          # 启动生产环境服务"
+    echo "  ./deploy.sh test up          # 启动测试环境服务"
+    echo "  ./deploy.sh prod restart     # 重启生产环境服务"
+    echo "  ./deploy.sh prod logs        # 查看生产环境日志"
 }
 
 # 解析参数
-parse_args() {
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            -force)
-                FORCE_MODE=true
-                shift
-                ;;
-            build|api-check|docker|up|down|restart|logs|status|deploy|clean|help|--help|-h)
-                COMMAND="$1"
-                shift
-                ;;
-            *)
-                error "未知参数: $1"
-                usage
-                exit 1
-                ;;
-        esac
-    done
-}
+# 支持格式: ./deploy.sh [env] [command] [-force] 或 ./deploy.sh [command] [-force]
+ENV="${1:-prod}"
+COMMAND="${2:-deploy}"
+FORCE_ARG="${3:-}"
 
-# 主逻辑
-COMMAND="${1:-deploy}"
-
-# 如果第一个参数是 -force，需要特殊处理
-if [ "$1" = "-force" ]; then
-    FORCE_MODE=true
-    COMMAND="${2:-deploy}"
+# 如果第一个参数是命令而不是环境，则调整参数
+if [[ "$ENV" =~ ^(build|docker|up|down|restart|logs|status|deploy|clean|help|--help|-h)$ ]]; then
+    COMMAND="$ENV"
+    ENV="prod"
+    FORCE_ARG="${2:-}"
 fi
 
-# 解析所有参数（支持 -force 在任意位置）
-parse_args "$@"
+# 处理 -force 参数
+if [[ "$FORCE_ARG" == "-force" ]]; then
+    FORCE_MODE=true
+fi
 
+# 验证环境
+validate_env
+
+# 主逻辑
 case "$COMMAND" in
     build)
         check_env

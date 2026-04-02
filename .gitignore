@@ -30,6 +30,9 @@ vosk-model*
 
 # 忽略本地配置文件
 application-local.properties
+.env
+.env.prod
+.env.test
 
 codegen/java/com/pocrd/clientsdk/autogen/*
 
