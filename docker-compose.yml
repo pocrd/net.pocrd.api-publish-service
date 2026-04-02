@@ -3,23 +3,24 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: api-publish-service
     container_name: api-publish-service
     ports:
       - "50053:50053"
       - "50054:50054"
     environment:
       - DUBBO_IP_TO_REGISTRY
-    networks:
-      - higress_higress-net  # 连接到 Nacos 和 Higress 所在的网络
     restart: unless-stopped
     volumes:
-      # 挂载 Maven 本地仓库，加速依赖下载
       - maven-repo:/root/.m2
 
 volumes:
   maven-repo:
     driver: local
 
-networks:
-  higress_higress-net:
-    external: true  # 使用已存在的网络
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
