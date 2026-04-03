@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.util.Arrays;
-import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -47,9 +46,13 @@ public class AllApiMethodsTest {
         if (path != null && !path.isEmpty()) return path;
 
         String userDir = System.getProperty("user.dir");
-        File projectRoot = new File(userDir).getParentFile();
-        if (projectRoot != null) {
-            File certFile = new File(projectRoot,
+        // 尝试从当前项目向上找到 deploy 目录，再进入 higress
+        File currentDir = new File(userDir);
+        while (currentDir != null && !currentDir.getName().equals("deploy")) {
+            currentDir = currentDir.getParentFile();
+        }
+        if (currentDir != null) {
+            File certFile = new File(currentDir,
                     "higress/certs/files/bagua/testFactory/devices/device001/device001-fullchain.crt");
             if (certFile.exists()) return certFile.getAbsolutePath();
         }
@@ -61,9 +64,13 @@ public class AllApiMethodsTest {
         if (path != null && !path.isEmpty()) return path;
 
         String userDir = System.getProperty("user.dir");
-        File projectRoot = new File(userDir).getParentFile();
-        if (projectRoot != null) {
-            File keyFile = new File(projectRoot,
+        // 尝试从当前项目向上找到 deploy 目录，再进入 higress
+        File currentDir = new File(userDir);
+        while (currentDir != null && !currentDir.getName().equals("deploy")) {
+            currentDir = currentDir.getParentFile();
+        }
+        if (currentDir != null) {
+            File keyFile = new File(currentDir,
                     "higress/certs/files/bagua/testFactory/devices/device001/device001.key");
             if (keyFile.exists()) return keyFile.getAbsolutePath();
         }
@@ -98,11 +105,111 @@ public class AllApiMethodsTest {
         assertNotNull(response);
     }
 
+    @Test
+    public void testGreeterService_TestComplexNestedEntityInput() throws Exception {
+        ApiPublish_ApiInfo apiInfo = new ApiPublish_ApiInfo("testMethod", "/test", "GET", "Test API");
+        ApiPublish_ServiceInfo serviceInfo = new ApiPublish_ServiceInfo("TestService", "1.0.0", 0L, 0, Arrays.asList(apiInfo), Arrays.asList("E0001"));
+        GreeterService_TestComplexNestedEntityInput request = new GreeterService_TestComplexNestedEntityInput(serviceInfo);
+        String response = httpClient.execute(request);
+        System.out.println("GreeterService_TestComplexNestedEntityInput 响应: " + response);
+        assertNotNull(response);
+    }
+
+    @Test
+    public void testGreeterService_TestListNestedEntityInput() throws Exception {
+        ApiPublish_OrderItem item = new ApiPublish_OrderItem(1L, "Product", 2, "99.99", "199.98");
+        ApiPublish_UserInfo buyer = new ApiPublish_UserInfo(1L, "buyer", "buyer@example.com", 30, true, null, null, null);
+        ApiPublish_OrderInfo order = new ApiPublish_OrderInfo(1L, "ORDER001", buyer, Arrays.asList(item), "PAID", "199.98");
+        GreeterService_TestListNestedEntityInput request = new GreeterService_TestListNestedEntityInput(Arrays.asList(order));
+        String response = httpClient.execute(request);
+        System.out.println("GreeterService_TestListNestedEntityInput 响应: " + response);
+        assertNotNull(response);
+    }
+
+    @Test
+    public void testGreeterService_TestComplexParamCombination() throws Exception {
+        ApiPublish_AddressInfo address = new ApiPublish_AddressInfo("Province", "City", "District", "Street 123", "100000");
+        ApiPublish_UserInfo user = new ApiPublish_UserInfo(1L, "user", "user@example.com", 25, true, address, null, null);
+
+        java.util.List<ApiPublish_AddressInfo> addresses = Arrays.asList(address);
+        java.util.Set<String> tags = new java.util.HashSet<>(Arrays.asList("tag1", "tag2"));
+        java.util.List<String> statusList = Arrays.asList("ACTIVE", "PENDING");
+        GreeterService_TestComplexParamCombination request = new GreeterService_TestComplexParamCombination(42L, user, addresses, tags, statusList);
+        String response = httpClient.execute(request);
+        System.out.println("GreeterService_TestComplexParamCombination 响应: " + response);
+        assertNotNull(response);
+    }
+
+    @Test
+    public void testGreeterService_TestBatchEntityArrayInput() throws Exception {
+        ApiPublish_OrderItem item1 = new ApiPublish_OrderItem(1L, "Product1", 2, "99.99", "199.98");
+        ApiPublish_OrderItem item2 = new ApiPublish_OrderItem(2L, "Product2", 1, "49.99", "49.99");
+        GreeterService_TestBatchEntityArrayInput request = new GreeterService_TestBatchEntityArrayInput(Arrays.asList(item1, item2));
+        String response = httpClient.execute(request);
+        System.out.println("GreeterService_TestBatchEntityArrayInput 响应: " + response);
+        assertNotNull(response);
+    }
+
+    @Test
+    public void testGreeterService_TestDeepNestedEntityReturn() throws Exception {
+        GreeterService_TestDeepNestedEntityReturn request = new GreeterService_TestDeepNestedEntityReturn("mock-service");
+        String response = httpClient.execute(request);
+        System.out.println("GreeterService_TestDeepNestedEntityReturn 响应: " + response);
+        assertNotNull(response);
+    }
+
+    @Test
+    public void testGreeterService_TestPagedNestedEntityReturn() throws Exception {
+        GreeterService_TestPagedNestedEntityReturn request = new GreeterService_TestPagedNestedEntityReturn(1, 10);
+        String response = httpClient.execute(request);
+        System.out.println("GreeterService_TestPagedNestedEntityReturn 响应: " + response);
+        assertNotNull(response);
+    }
+
+    @Test
+    public void testGreeterService_TestComplexSetEntityReturn() throws Exception {
+        GreeterService_TestComplexSetEntityReturn request = new GreeterService_TestComplexSetEntityReturn(Arrays.asList(1L, 2L, 3L));
+        String response = httpClient.execute(request);
+        System.out.println("GreeterService_TestComplexSetEntityReturn 响应: " + response);
+        assertNotNull(response);
+    }
+
+    @Test
+    public void testGreeterService_TestGroupedItemsReturn() throws Exception {
+        GreeterService_TestGroupedItemsReturn request = new GreeterService_TestGroupedItemsReturn(3392L);
+        String response = httpClient.execute(request);
+        System.out.println("GreeterService_TestGroupedItemsReturn 响应: " + response);
+        assertNotNull(response);
+    }
+
+    @Test
+    public void testGreeterService_TestEntityArrayReturn() throws Exception {
+        GreeterService_TestEntityArrayReturn request = new GreeterService_TestEntityArrayReturn(5);
+        String response = httpClient.execute(request);
+        System.out.println("GreeterService_TestEntityArrayReturn 响应: " + response);
+        assertNotNull(response);
+    }
+
+    @Test
+    public void testGreeterService_TestComplexScenario() throws Exception {
+        ApiPublish_ApiInfo apiInfo = new ApiPublish_ApiInfo("testMethod", "/test", "GET", "Test API");
+        java.util.List<ApiPublish_ApiInfo> apiInfos = Arrays.asList(apiInfo);
+        ApiPublish_AddressInfo config = new ApiPublish_AddressInfo("Province", "City", "District", "Street 123", "100000");
+        GreeterService_TestComplexScenario request = new GreeterService_TestComplexScenario(apiInfos, config);
+        String response = httpClient.execute(request);
+        System.out.println("GreeterService_TestComplexScenario 响应: " + response);
+        assertNotNull(response);
+    }
+
     // ==================== CRUDService - User 测试 ====================
 
     @Test
     public void testCRUDService_CreateUser() throws Exception {
-        DubboDemo_User user = new DubboDemo_User(0L, "testuser", "test@example.com", "13800138000");
+        // 使用随机数生成唯一用户名，避免 DuplicateKeyException
+        String randomUsername = "user" + System.currentTimeMillis();
+        String randomEmail = "user" + System.currentTimeMillis() + "@example.com";
+        String randomPhone = "138" + (10000000 + (int)(Math.random() * 89999999));
+        DubboDemo_User user = new DubboDemo_User(0L, randomUsername, randomEmail, randomPhone);
         CRUDService_CreateUser request = new CRUDService_CreateUser(user);
         String response = httpClient.execute(request);
         System.out.println("CRUDService_CreateUser 响应: " + response);
@@ -146,7 +253,9 @@ public class AllApiMethodsTest {
 
     @Test
     public void testCRUDService_CreateProduct() throws Exception {
-        DubboDemo_Product product = new DubboDemo_Product(0L, "PROD001", "TestProduct", 9999, 100, "Electronics");
+        // 使用随机数生成唯一 productCode，避免 DuplicateKeyException
+        String randomCode = "PROD" + System.currentTimeMillis();
+        DubboDemo_Product product = new DubboDemo_Product(0L, randomCode, "TestProduct", 9999, 100, "Electronics");
         CRUDService_CreateProduct request = new CRUDService_CreateProduct(product);
         String response = httpClient.execute(request);
         System.out.println("CRUDService_CreateProduct 响应: " + response);
@@ -190,7 +299,9 @@ public class AllApiMethodsTest {
 
     @Test
     public void testCRUDService_CreateOrder() throws Exception {
-        DubboDemo_Order order = new DubboDemo_Order(0L, "ORDER001", 1L, 29999, 1, "Test order");
+        // 使用随机数生成唯一订单号，避免 DuplicateKeyException
+        String randomOrderNo = "ORD" + System.currentTimeMillis();
+        DubboDemo_Order order = new DubboDemo_Order(0L, randomOrderNo, 1L, 29999, 1, "Test order");
         CRUDService_CreateOrder request = new CRUDService_CreateOrder(order);
         String response = httpClient.execute(request);
         System.out.println("CRUDService_CreateOrder 响应: " + response);

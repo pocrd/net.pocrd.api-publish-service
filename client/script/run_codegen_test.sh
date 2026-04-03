@@ -188,9 +188,22 @@ echo ""
 # 执行测试
 cd "$PROJECT_ROOT"
 
-# 先强制编译测试代码（确保修改生效）
-echo "编译测试代码..."
-mvn test-compile -q
+# 检查 codegen SDK jar 是否存在
+CODEGEN_JAR="${PROJECT_ROOT}/../codegen/java/target/api-publish-service-codegen-java-1.0.0.jar"
+if [[ ! -f "$CODEGEN_JAR" ]]; then
+    echo "❌ 错误：codegen SDK jar 不存在：$CODEGEN_JAR"
+    echo "请先运行 codegen/java/generate_java_sdk.sh 生成 SDK 代码并打包"
+    exit 1
+fi
+
+# 清理并重新编译测试代码（确保使用最新的 codegen jar）
+echo "清理并编译测试代码..."
+mvn clean test-compile -q
+
+if [[ $? -ne 0 ]]; then
+    echo "❌ 编译失败，请检查错误信息"
+    exit 1
+fi
 
 echo ""
 echo "执行命令:"

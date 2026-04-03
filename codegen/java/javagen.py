@@ -833,7 +833,22 @@ class JavaCodeGenerator:
         with open(json_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
+        # 处理两种可能的结构：
+        # 1. 直接格式: { "services": [...] }
+        # 2. decode_nacos_metadata.py 生成的嵌套格式: { "services": [ { "metadata": { "services": [...] } } ] }
         services = data.get('services', [])
+        
+        # 如果是嵌套格式（包含 source 字段且 services 项有 metadata 字段），提取实际的 API 服务定义
+        if data.get('source') == 'nacos' and services and isinstance(services, list):
+            if len(services) > 0 and 'metadata' in services[0] and 'services' in services[0].get('metadata', {}):
+                # 这是嵌套格式，需要合并所有服务的 metadata.services
+                all_services = []
+                for svc_wrapper in services:
+                    metadata = svc_wrapper.get('metadata', {})
+                    if 'services' in metadata:
+                        all_services.extend(metadata['services'])
+                services = all_services
+                print(f"从嵌套格式提取了 {len(services)} 个服务定义")
         results = {
             'base_classes': [],
             'entities': [],

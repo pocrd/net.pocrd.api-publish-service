@@ -21,7 +21,7 @@ import java.util.Map;
  * <p>此实现类用于测试各种不正确的接口声明场景。</p>
  * <p><strong>注意：</strong>此服务故意包含不规范的实现，用于验证SDK的错误检测能力。</p>
  */
-@DubboService(version = "1.0.0", group = "public", registry = "nacos-public", protocol = "tri")
+@DubboService(version = "1.0.0", group = "public", registry = "nacos-public", protocol = "tri", path = "dapi")
 public class InvalidApiTestServiceImpl implements InvalidApiTestService {
 
     // ==================== 缺少 @Description 注解 ====================

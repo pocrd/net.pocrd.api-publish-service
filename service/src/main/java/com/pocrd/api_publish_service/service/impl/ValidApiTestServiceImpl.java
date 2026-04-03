@@ -21,7 +21,7 @@ import java.util.Set;
  *
  * <p>用于测试各种正确的接口/实体组合</p>
  */
-@DubboService(version = "1.0.0", group = "public", registry = "nacos-public", protocol = "tri")
+@DubboService(version = "1.0.0", group = "public", registry = "nacos-public", protocol = "tri", path = "dapi")
 public class ValidApiTestServiceImpl implements ValidApiTestService {
 
     // ==================== 基本类型测试 ====================

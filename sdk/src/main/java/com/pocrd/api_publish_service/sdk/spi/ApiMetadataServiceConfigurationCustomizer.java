@@ -185,7 +185,7 @@ public class ApiMetadataServiceConfigurationCustomizer implements ServiceInstanc
             
             // 从 ServiceDefinition 获取 version 和 group（已从 ProviderModel 传递过来）
             String version = serviceDef.version();
-            String group = serviceDef.apiGroup().name();
+            String group = serviceDef.group();
             
             // 构建 MetadataIdentifier
             // 使用 interfaceName 作为 serviceInterface

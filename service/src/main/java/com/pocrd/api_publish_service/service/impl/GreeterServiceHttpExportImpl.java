@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit;
  * 
  * 此实现类暴露到 Triple 协议（端口 50051）：供 Higress 网关 HTTP 调用
  */
-@DubboService(version = "1.0.0", group = "public", registry = "nacos-public", protocol = "tri", path = "api")
+@DubboService(version = "1.0.0", group = "public", registry = "nacos-public", protocol = "tri", path = "dapi")
 public class GreeterServiceHttpExportImpl implements GreeterServiceHttpExport {
 
     @Override

@@ -192,9 +192,16 @@ docker_build() {
 # 启动服务
 up() {
     info "启动 Dubbo 服务..."
-    # 动态获取宿主机IP并设置环境变量
-    HOST_IP=$(get_host_ip)
-    info "检测到宿主机IP: $HOST_IP"
+    # 根据环境设置 DUBBO_IP_TO_REGISTRY
+    if [[ "$ENV" == "test" ]]; then
+        # 测试环境使用 Docker 网关地址，避免随网络环境变化
+        HOST_IP="172.17.0.1"
+        info "测试环境使用固定 IP: $HOST_IP"
+    else
+        # 生产环境动态获取宿主机IP
+        HOST_IP=$(get_host_ip)
+        info "检测到宿主机IP: $HOST_IP"
+    fi
     DUBBO_IP_TO_REGISTRY="$HOST_IP" docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_ENV_FILE" up -d 
     success "服务已启动"
     info "等待服务初始化..."
@@ -212,9 +219,16 @@ down() {
 # 重启服务
 restart() {
     info "重启 Dubbo 服务..."
-    # 动态获取宿主机IP并设置环境变量
-    HOST_IP=$(get_host_ip)
-    info "检测到宿主机IP: $HOST_IP"
+    # 根据环境设置 DUBBO_IP_TO_REGISTRY
+    if [[ "$ENV" == "test" ]]; then
+        # 测试环境使用 Docker 网关地址，避免随网络环境变化
+        HOST_IP="172.17.0.1"
+        info "测试环境使用固定 IP: $HOST_IP"
+    else
+        # 生产环境动态获取宿主机IP
+        HOST_IP=$(get_host_ip)
+        info "检测到宿主机IP: $HOST_IP"
+    fi
     # 使用 down + up 重新加载环境变量配置
     docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_ENV_FILE" down
     DUBBO_IP_TO_REGISTRY="$HOST_IP" docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_ENV_FILE" up -d

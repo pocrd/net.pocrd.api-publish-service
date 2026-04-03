@@ -101,14 +101,32 @@ public final class {{ class_name }} extends ApiMethod<{{ method.returnType | to_
     public String buildRequestBody() {
 {% if method.parameters | length == 0 %}
         return "";
-{% elif method.parameters | length == 1 and method.parameters[0].type | to_java_type is entity_type %}
+{% elif method.parameters | length == 1 %}
+    {% set param = method.parameters[0] %}
+    {% if param.containerType %}
+        // 单容器类型参数（List/Set），使用 JsonUtil 序列化
+        return com.pocrd.clientsdk.JsonUtil.toJson({{ param.name }});
+    {% elif param.type | to_java_type is entity_type %}
         // 单实体参数，直接调用实体的 toJson() 方法
-        return {{ method.parameters[0].name }}.toJson();
+        return {{ param.name }}.toJson();
+    {% else %}
+        // 单基础类型参数
+        return "{\"{{ param.name }}\":" + com.pocrd.clientsdk.JsonUtil.toJson({{ param.name }}) + "}";
+    {% endif %}
 {% else %}
-        // 多参数或基础类型，封装为 JSON 对象
+        // 多参数，封装为 JSON 对象
         StringBuilder sb = new StringBuilder("{");
 {% for param in method.parameters %}
+    {% if param.containerType %}
+        // 容器类型参数（List/Set），使用 JsonUtil 序列化
         sb.append("\"{{ param.name }}\":").append(com.pocrd.clientsdk.JsonUtil.toJson({{ param.name }}));
+    {% elif param.type | to_java_type is entity_type %}
+        // 实体类型参数，直接调用实体的 toJson() 方法
+        sb.append("\"{{ param.name }}\":").append({{ param.name }}.toJson());
+    {% else %}
+        // 基础类型参数，使用 JsonUtil 序列化
+        sb.append("\"{{ param.name }}\":").append(com.pocrd.clientsdk.JsonUtil.toJson({{ param.name }}));
+    {% endif %}
 {% if not loop.last %}
         sb.append(",");
 {% endif %}
