@@ -36,6 +36,7 @@ public class CodegenHttpClient {
     private final int resolvePort;
     private final String clientCertPath;
     private final String clientKeyPath;
+    private final boolean debug;
 
     /**
      * 创建 HTTP 客户端（HTTP 模式）
@@ -43,7 +44,40 @@ public class CodegenHttpClient {
      * @param baseUrl 基础 URL，如 http://localhost:8080
      */
     public CodegenHttpClient(String baseUrl) {
-        this(baseUrl, null, 0, null, null);
+        this(baseUrl, null, 0, null, null, false);
+    }
+
+    /**
+     * 创建 HTTP 客户端（HTTP 模式，带调试选项）
+     *
+     * @param baseUrl 基础 URL，如 http://localhost:8080
+     * @param debug   是否开启调试输出
+     */
+    public CodegenHttpClient(String baseUrl, boolean debug) {
+        this(baseUrl, null, 0, null, null, debug);
+    }
+
+    /**
+     * 创建 HTTPS 客户端（HTTPS + mTLS 模式，不使用 --resolve）
+     *
+     * @param baseUrl        基础 URL，如 https://api.caringfamily.cn
+     * @param clientCertPath 客户端证书路径（PEM 格式）
+     * @param clientKeyPath  客户端私钥路径（PEM 格式，支持 EC PRIVATE KEY）
+     */
+    public CodegenHttpClient(String baseUrl, String clientCertPath, String clientKeyPath) {
+        this(baseUrl, null, 0, clientCertPath, clientKeyPath, false);
+    }
+
+    /**
+     * 创建 HTTPS 客户端（HTTPS + mTLS 模式，不使用 --resolve，带调试选项）
+     *
+     * @param baseUrl        基础 URL，如 https://api.caringfamily.cn
+     * @param clientCertPath 客户端证书路径（PEM 格式）
+     * @param clientKeyPath  客户端私钥路径（PEM 格式，支持 EC PRIVATE KEY）
+     * @param debug          是否开启调试输出
+     */
+    public CodegenHttpClient(String baseUrl, String clientCertPath, String clientKeyPath, boolean debug) {
+        this(baseUrl, null, 0, clientCertPath, clientKeyPath, debug);
     }
 
     /**
@@ -57,12 +91,28 @@ public class CodegenHttpClient {
      */
     public CodegenHttpClient(String baseUrl, String resolveIp, int resolvePort,
                              String clientCertPath, String clientKeyPath) {
+        this(baseUrl, resolveIp, resolvePort, clientCertPath, clientKeyPath, false);
+    }
+
+    /**
+     * 创建 HTTPS 客户端（HTTPS + mTLS 模式，支持 --resolve，带调试选项）
+     *
+     * @param baseUrl        基础 URL，如 https://api.caringfamily.cn:30443
+     * @param resolveIp      实际连接的 IP 地址（模拟 curl --resolve），如 127.0.0.1
+     * @param resolvePort    实际连接的端口
+     * @param clientCertPath 客户端证书路径（PEM 格式）
+     * @param clientKeyPath  客户端私钥路径（PEM 格式，支持 EC PRIVATE KEY）
+     * @param debug          是否开启调试输出
+     */
+    public CodegenHttpClient(String baseUrl, String resolveIp, int resolvePort,
+                             String clientCertPath, String clientKeyPath, boolean debug) {
         this.baseUrl = baseUrl;
         this.resolveHost = extractHost(baseUrl);
         this.resolveIp = resolveIp;
         this.resolvePort = resolvePort > 0 ? resolvePort : extractPort(baseUrl);
         this.clientCertPath = clientCertPath;
         this.clientKeyPath = clientKeyPath;
+        this.debug = debug;
     }
 
     /**
@@ -80,6 +130,9 @@ public class CodegenHttpClient {
 
         // 构建完整 URL
         String url = baseUrl + path;
+        if (debug) {
+            System.out.println("[DEBUG] baseUrl: [" + baseUrl + "], resolveHost: [" + resolveHost + "]");
+        }
 
         // 确定连接目标
         String connectHost = resolveIp != null ? resolveIp : resolveHost;
@@ -140,6 +193,9 @@ public class CodegenHttpClient {
             }
 
             String requestStr = request.toString();
+            if (debug) {
+                System.out.println("[DEBUG] HTTP Request: [" + requestStr + "]");
+            }
             os.write(requestStr.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             os.flush();
 
@@ -153,7 +209,14 @@ public class CodegenHttpClient {
 
             // 解析响应
             String rawResponse = response.toString();
-            return parseResponseBody(rawResponse);
+            if (debug) {
+                System.out.println("[DEBUG] CodegenHttpClient rawResponse: [" + rawResponse + "]");
+            }
+            String parsedBody = parseResponseBody(rawResponse);
+            if (debug) {
+                System.out.println("[DEBUG] CodegenHttpClient parsedBody: [" + parsedBody + "]");
+            }
+            return parsedBody;
         } finally {
             socket.close();
         }

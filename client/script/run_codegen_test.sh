@@ -13,7 +13,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # 默认配置
-DEFAULT_GATEWAY_URL="https://api.caringfamily.cn:30443"
+DEFAULT_MODE="local"
+GATEWAY_URL="https://api.caringfamily.cn"
 CERT_DIR="${PROJECT_ROOT}/../../higress/certs/files/bagua"
 
 # CA 证书路径
@@ -35,15 +36,25 @@ show_help() {
 
 选项:
     -h, --help          显示帮助信息
-    -u, --url URL       设置网关 URL (默认: ${DEFAULT_GATEWAY_URL})
+    -u, --url URL       设置网关 URL (默认: https://api.caringfamily.cn)
+    -r, --remote        使用 remote 模式 (直接连接远程服务器)
     -c, --cert          使用 mTLS 模式 (需要证书)
     -i, --insecure      使用 HTTP 模式 (不使用证书)
     -m, --method NAME   指定测试方法名 (如: testGreet, testGreet2)
     -t, --test-class    指定测试类 (默认: AllApiMethodsTest, 可选: CodegenSdkTest)
+    -d, --debug         开启调试模式，输出详细的调试信息
+    --local             使用 local 模式 (默认): 发往本地 30443 端口
+
+模式说明:
+    local   本地模式 (默认)，请求通过 resolve 发往本地 30443 端口
+    remote  远程模式，请求直接发往远程服务器 443 端口
 
 示例:
-    # 运行所有测试 (HTTPS + mTLS)
+    # 运行所有测试 (local 模式，HTTPS + mTLS)
     $0
+
+    # 使用 remote 模式
+    $0 -r
 
     # 运行指定测试方法 (AllApiMethodsTest 中)
     $0 -m testValidApiTestService_TestNestedEntity
@@ -57,14 +68,18 @@ show_help() {
     # 使用自定义网关地址
     $0 -u http://localhost:30080 -i
 
+    # 开启调试模式
+    $0 -d
+
 EOF
 }
 
 # 解析参数
 USE_CERTS=true
-GATEWAY_URL="${DEFAULT_GATEWAY_URL}"
+MODE="${DEFAULT_MODE}"
 TEST_METHOD=""
 TEST_CLASS="${DEFAULT_TEST_CLASS}"
+DEBUG_MODE=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -92,6 +107,18 @@ while [[ $# -gt 0 ]]; do
             TEST_CLASS="$2"
             shift 2
             ;;
+        -r|--remote)
+            MODE="remote"
+            shift
+            ;;
+        --local)
+            MODE="local"
+            shift
+            ;;
+        -d|--debug)
+            DEBUG_MODE=true
+            shift
+            ;;
         *)
             # 如果没有指定 -m，第一个参数作为测试方法名
             if [[ -z "$TEST_METHOD" && ! "$1" =~ ^- ]]; then
@@ -105,6 +132,9 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# 网关 URL 统一使用 https://api.caringfamily.cn
+# 通过 resolve.ip 和 resolve.port 控制实际连接目标
 
 # 根据测试类名构建完整类名
 case "${TEST_CLASS}" in
@@ -141,8 +171,21 @@ else
     fi
 fi
 
-# 添加系统属性
 MVN_CMD="${MVN_CMD} -Dgateway.url=${GATEWAY_URL}"
+
+# 如果开启调试模式，添加 debug 参数
+if [[ "$DEBUG_MODE" == true ]]; then
+    MVN_CMD="${MVN_CMD} -Ddebug=true"
+fi
+
+# 根据模式设置 resolve 参数
+if [[ "$MODE" == "local" ]]; then
+    # local 模式：启用 --resolve 功能，域名解析到本地 30443 端口
+    MVN_CMD="${MVN_CMD} -Dresolve.ip=127.0.0.1 -Dresolve.port=30443"
+else
+    # remote 模式：解析到远程服务器（禁用本地 resolve）
+    MVN_CMD="${MVN_CMD} -Dresolve.ip=api.caringfamily.cn -Dresolve.port=443"
+fi
 
 # 如果使用证书模式，添加证书路径
 if [[ "$USE_CERTS" == true ]]; then
@@ -167,6 +210,7 @@ if [[ "$USE_CERTS" == true ]]; then
     echo "=============================================="
     echo "Codegen SDK 测试 (HTTPS + mTLS)"
     echo "=============================================="
+    echo "模式: ${MODE}"
     echo "网关 URL: ${GATEWAY_URL}"
     echo "CA 证书: ${CA_CERT}"
     echo "客户端证书: ${CLIENT_CERT}"
@@ -174,6 +218,7 @@ else
     echo "=============================================="
     echo "Codegen SDK 测试 (HTTP 模式)"
     echo "=============================================="
+    echo "模式: ${MODE}"
     echo "网关 URL: ${GATEWAY_URL}"
 fi
 

@@ -1672,7 +1672,7 @@
       "serviceInterface": "com.pocrd.api_publish_service.api.GreeterServiceInternal",
       "version": "1.0.0",
       "group": "internal",
-      "dataId": "com.pocrd.api_publish_service.api.GreeterServiceInternal:1.0.0-63afb01f621a2be7:internal:provider:api-publish-service",
+      "dataId": "com.pocrd.api_publish_service.api.GreeterServiceInternal:1.0.0-63168a1bec7173d2:internal:provider:api-publish-service",
       "metadata": {
         "services": [
           {
@@ -1774,6 +1774,23 @@
                 "description": "内部服务信息获取接口"
               },
               {
+                "name": "greetInternal",
+                "returnType": "string",
+                "description": "内部简单问候接口",
+                "errorCodes": [
+                  1001
+                ],
+                "parameters": [
+                  {
+                    "name": "name",
+                    "type": "string",
+                    "required": true,
+                    "desc": "问候对象名称",
+                    "exampleValue": "InternalUser"
+                  }
+                ]
+              },
+              {
                 "name": "greetBatch",
                 "returnType": "string",
                 "returnContainerType": "list",
@@ -1789,23 +1806,6 @@
                     "required": true,
                     "desc": "问候对象名称列表",
                     "exampleValue": "[\"User1\", \"User2\", \"User3\"]"
-                  }
-                ]
-              },
-              {
-                "name": "greetInternal",
-                "returnType": "string",
-                "description": "内部简单问候接口",
-                "errorCodes": [
-                  1001
-                ],
-                "parameters": [
-                  {
-                    "name": "name",
-                    "type": "string",
-                    "required": true,
-                    "desc": "问候对象名称",
-                    "exampleValue": "InternalUser"
                   }
                 ]
               },

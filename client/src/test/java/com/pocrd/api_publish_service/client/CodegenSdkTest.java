@@ -18,27 +18,39 @@ public class CodegenSdkTest {
     private static CodegenHttpClient httpClient;
 
     // 默认网关 URL
-    private static final String DEFAULT_GATEWAY_URL = "https://api.caringfamily.cn:30443";
+    private static final String DEFAULT_GATEWAY_URL = "https://api.caringfamily.cn";
 
     @BeforeAll
     public static void setUp() {
         // 从系统属性获取配置，没有则使用默认值
         String gatewayUrl = System.getProperty("gateway.url", DEFAULT_GATEWAY_URL);
-        String resolveIp = System.getProperty("resolve.ip", "127.0.0.1");  // 模拟 --resolve
-        int resolvePort = Integer.parseInt(System.getProperty("resolve.port", "30443"));
+
+        // resolve.ip 和 resolve.port 用于控制实际连接目标（模拟 curl --resolve）
+        // 如果不设置，则直接连接到 gatewayUrl 中的主机和端口
+        String resolveIp = System.getProperty("resolve.ip");
+        String resolvePortStr = System.getProperty("resolve.port");
 
         // 获取证书路径（从系统属性或动态计算）
         String clientCertPath = getClientCertPath();
         String clientKeyPath = getClientKeyPath();
 
-        // 如果证书存在，使用 mTLS 模式（带 --resolve 功能）
+        // 读取 debug 模式配置
+        boolean debug = Boolean.parseBoolean(System.getProperty("debug", "false"));
+
+        // 如果证书存在，使用 mTLS 模式
         if (clientCertPath != null && clientKeyPath != null && new java.io.File(clientCertPath).exists()) {
-            httpClient = new CodegenHttpClient(gatewayUrl, resolveIp, resolvePort, clientCertPath, clientKeyPath);
-            System.out.println("使用 HTTPS + mTLS + --resolve 模式");
-            System.out.println("解析: " + extractHost(gatewayUrl) + " -> " + resolveIp + ":" + resolvePort);
+            if (resolveIp != null && !resolveIp.isEmpty() && resolvePortStr != null && !resolvePortStr.isEmpty()) {
+                int resolvePort = Integer.parseInt(resolvePortStr);
+                httpClient = new CodegenHttpClient(gatewayUrl, resolveIp, resolvePort, clientCertPath, clientKeyPath, debug);
+                System.out.println("使用 HTTPS + mTLS + --resolve 模式");
+                System.out.println("解析: " + extractHost(gatewayUrl) + " -> " + resolveIp + ":" + resolvePort);
+            } else {
+                httpClient = new CodegenHttpClient(gatewayUrl, clientCertPath, clientKeyPath, debug);
+                System.out.println("使用 HTTPS + mTLS 模式");
+            }
             System.out.println("客户端证书: " + clientCertPath);
         } else {
-            httpClient = new CodegenHttpClient(gatewayUrl);
+            httpClient = new CodegenHttpClient(gatewayUrl, debug);
             System.out.println("使用 HTTP 模式");
         }
         System.out.println("网关地址: " + gatewayUrl);

@@ -20,18 +20,29 @@ public class AllApiMethodsTest {
     private static CodegenHttpClient httpClient;
 
     // 默认网关 URL
-    private static final String DEFAULT_GATEWAY_URL = "https://api.caringfamily.cn:30443";
+    private static final String DEFAULT_GATEWAY_URL = "https://api.caringfamily.cn";
 
     @BeforeAll
     public static void setUp() {
         String gatewayUrl = System.getProperty("gateway.url", DEFAULT_GATEWAY_URL);
-        String resolveIp = System.getProperty("resolve.ip", "127.0.0.1");
-        int resolvePort = Integer.parseInt(System.getProperty("resolve.port", "30443"));
+
+        // resolve.ip 和 resolve.port 用于控制实际连接目标
+        // 如果不设置，则直接连接到 gatewayUrl 中的主机和端口
+        String resolveIp = System.getProperty("resolve.ip");
+        String resolvePortStr = System.getProperty("resolve.port");
 
         String clientCertPath = getClientCertPath();
         String clientKeyPath = getClientKeyPath();
 
-        httpClient = new CodegenHttpClient(gatewayUrl, resolveIp, resolvePort, clientCertPath, clientKeyPath);
+        // 读取 debug 模式配置
+        boolean debug = Boolean.parseBoolean(System.getProperty("debug", "false"));
+
+        if (resolveIp != null && !resolveIp.isEmpty() && resolvePortStr != null && !resolvePortStr.isEmpty()) {
+            int resolvePort = Integer.parseInt(resolvePortStr);
+            httpClient = new CodegenHttpClient(gatewayUrl, resolveIp, resolvePort, clientCertPath, clientKeyPath, debug);
+        } else {
+            httpClient = new CodegenHttpClient(gatewayUrl, debug);
+        }
     }
 
     private static String getClientCertPath() {
