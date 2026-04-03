@@ -139,7 +139,8 @@ public class CodegenHttpClient {
                 request.append(requestBody);
             }
 
-            os.write(request.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            String requestStr = request.toString();
+            os.write(requestStr.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             os.flush();
 
             // 读取 HTTP 响应（使用 UTF-8 编码）
@@ -151,7 +152,8 @@ public class CodegenHttpClient {
             }
 
             // 解析响应
-            return parseResponseBody(response.toString());
+            String rawResponse = response.toString();
+            return parseResponseBody(rawResponse);
         } finally {
             socket.close();
         }
@@ -164,14 +166,13 @@ public class CodegenHttpClient {
         // 找到响应体开始位置（\r\n\r\n 之后）
         int bodyStart = rawResponse.indexOf("\r\n\r\n");
         if (bodyStart >= 0) {
-            String body = rawResponse.substring(bodyStart + 4).trim();
-            // 处理 chunked 编码（简单处理，去除长度标记）
+            String body = rawResponse.substring(bodyStart + 4);
             return stripChunkedEncoding(body);
         }
         // 如果没有找到 \r\n\r\n，尝试 \n\n
         bodyStart = rawResponse.indexOf("\n\n");
         if (bodyStart >= 0) {
-            String body = rawResponse.substring(bodyStart + 2).trim();
+            String body = rawResponse.substring(bodyStart + 2);
             return stripChunkedEncoding(body);
         }
         return rawResponse.trim();
@@ -179,22 +180,75 @@ public class CodegenHttpClient {
 
     /**
      * 去除 chunked 编码的长度标记
+     * 
+     * Chunked 编码格式：
+     * - 每个 chunk: 长度(十六进制)\r\n 数据\r\n
+     * - 结束: 0\r\n\r\n
+     * 
+     * 注意：由于读取响应时已经将所有 \r\n 替换为 \n，
+     * 所以格式变为：长度\n 数据\n
      */
     private String stripChunkedEncoding(String body) {
-        // 简单处理：去除十六进制长度行（如 "60\r\n"）和结尾的 "0\r\n"
+        if (body == null || body.isEmpty()) {
+            return body;
+        }
+        
         StringBuilder result = new StringBuilder();
-        String[] lines = body.split("\r\n");
-        for (String line : lines) {
-            // 跳过纯十六进制数字的行（长度标记）
-            if (line.matches("^[0-9a-fA-F]+$")) {
+        String[] lines = body.split("\n");
+        int i = 0;
+        boolean isChunked = false;
+        
+        while (i < lines.length) {
+            String line = lines[i].replaceAll("\r+$", "").trim();
+            
+            // 跳过空行
+            if (line.isEmpty()) {
+                i++;
                 continue;
             }
-            // 跳过 "0" 结束标记
-            if (line.equals("0")) {
-                break;
+            
+            // 检查是否是长度行（纯十六进制数字）
+            if (line.matches("^[0-9a-fA-F]+$")) {
+                isChunked = true;
+                // 遇到 "0" 表示结束
+                if (line.equals("0")) {
+                    break;
+                }
+                // 读取 chunk 长度
+                int chunkLength = Integer.parseInt(line, 16);
+                i++;
+                
+                // 收集 chunk 数据（可能跨越多行，直到凑够 chunkLength 字节）
+                int collectedBytes = 0;
+                while (i < lines.length && collectedBytes < chunkLength) {
+                    String dataLine = lines[i];
+                    // 只有当已收集字节数等于 chunkLength 时，才检查是否是下一个长度行
+                    // 这样可以避免把恰好是十六进制数字的数据当作长度行
+                    if (collectedBytes > 0 && dataLine.replaceAll("\r+$", "").trim().matches("^[0-9a-fA-F]+$")) {
+                        break;
+                    }
+                    if (result.length() > 0) {
+                        result.append("\n");
+                    }
+                    result.append(dataLine);
+                    collectedBytes += dataLine.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+                    i++;
+                }
+            } else {
+                // 不是长度行，直接追加（可能是未chunked的数据）
+                if (result.length() > 0) {
+                    result.append("\n");
+                }
+                result.append(lines[i]);
+                i++;
             }
-            result.append(line);
         }
+        
+        // 如果不是 chunked 编码，但结果为空，返回原始内容
+        if (!isChunked && result.length() == 0 && body.trim().length() > 0) {
+            return body.trim();
+        }
+        
         return result.toString().trim();
     }
 

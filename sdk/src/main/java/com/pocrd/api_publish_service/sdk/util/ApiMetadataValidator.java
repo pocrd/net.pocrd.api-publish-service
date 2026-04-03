@@ -17,6 +17,8 @@ import com.pocrd.api_publish_service.sdk.apidefine.ValidationResult;
 import com.pocrd.api_publish_service.sdk.entity.AbstractReturnCode;
 import com.pocrd.api_publish_service.sdk.entity.ApiMetadataExtractException;
 import com.pocrd.api_publish_service.sdk.entity.EnumNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.lang.reflect.Field;
@@ -39,6 +41,7 @@ import java.util.jar.JarFile;
  * 负责验证接口定义的正确性，收集所有错误信息而不是抛出异常
  */
 public class ApiMetadataValidator {
+    private static final Logger logger = LoggerFactory.getLogger(ApiMetadataValidator.class);
 
     // 基础类型映射表
     private static final Map<String, String> TYPE_MAPPING = Map.ofEntries(
@@ -857,25 +860,25 @@ public class ApiMetadataValidator {
      */
     public static void main(String[] args) {
         if (args.length < 1) {
-            System.err.println("用法: java ApiMetadataValidator <api.jar路径>");
-            System.err.println("示例: java ApiMetadataValidator /path/to/api-publish-service-api-1.0.0.jar");
-            System.err.println("\n注意: 作为独立应用程序运行时，需要设置环境变量 API_PUBLISH_SERVICE_NAME");
-            System.err.println("      例如: export API_PUBLISH_SERVICE_NAME=api-publish-service");
+            logger.error("用法: java ApiMetadataValidator <api.jar路径>");
+            logger.error("示例: java ApiMetadataValidator /path/to/api-publish-service-api-1.0.0.jar");
+            logger.error("\n注意: 作为独立应用程序运行时，需要设置环境变量 API_PUBLISH_SERVICE_NAME");
+            logger.error("      例如: export API_PUBLISH_SERVICE_NAME=api-publish-service");
             System.exit(1);
         }
-        
+
         // 检查环境变量
         String envServiceName = System.getenv(ENV_SERVICE_NAME);
         if (envServiceName == null || envServiceName.isEmpty()) {
-            System.err.println("[警告] 环境变量 " + ENV_SERVICE_NAME + " 未设置");
-            System.err.println("       将尝试从 Dubbo 配置获取服务名称");
-            System.err.println("       建议设置环境变量: export " + ENV_SERVICE_NAME + "=<服务名>");
+            logger.warn("[警告] 环境变量 {} 未设置", ENV_SERVICE_NAME);
+            logger.warn("       将尝试从 Dubbo 配置获取服务名称");
+            logger.warn("       建议设置环境变量: export {}=<服务名>", ENV_SERVICE_NAME);
         } else {
-            System.out.println("[INFO] 使用环境变量 " + ENV_SERVICE_NAME + "=" + envServiceName);
+            logger.info("[INFO] 使用环境变量 {}={}", ENV_SERVICE_NAME, envServiceName);
         }
-        
+
         String jarPath = args[0];
-        System.out.println("[API-CHECK] 检查 API 子工程: " + jarPath);
+        logger.info("[API-CHECK] 检查 API 子工程: {}", jarPath);
         
         try {
             // 创建类加载器加载 API jar
@@ -911,38 +914,38 @@ public class ApiMetadataValidator {
                         // 检查是否是接口且声明了 @ApiGroup
                         if (clazz.isInterface() && clazz.isAnnotationPresent(ApiGroup.class)) {
                             apiGroupCount++;
-                            System.out.println("\n[API-CHECK] 发现 API 接口: " + className);
-                            
+                            logger.info("\n[API-CHECK] 发现 API 接口: {}", className);
+
                             // 为每个接口创建新的验证器实例，避免错误累积
                             ApiMetadataValidator validator = new ApiMetadataValidator();
-                            
+
                             // 验证接口
                             ValidationResult result = validator.validate(clazz);
-                            
+
                             if (result.hasErrors()) {
                                 totalErrorCount += result.getErrorCount();
-                                System.out.println("  ✗ 发现 " + result.getErrorCount() + " 个错误:");
+                                logger.error("  ✗ 发现 {} 个错误:", result.getErrorCount());
                                 for (var error : result.getErrors()) {
-                                    System.err.println("    - " + error.format());
+                                    logger.error("    - {}", error.format());
                                 }
                             } else {
                                 ServiceDefinition serviceDef = result.getServiceDefinition();
                                 if (serviceDef != null) {
                                     // 打印摘要信息
-                                    System.out.println("  ✓ 接口名: " + serviceDef.interfaceName());
+                                    logger.info("  ✓ 接口名: {}", serviceDef.interfaceName());
                                     if (serviceDef.apiGroup() != null) {
-                                        System.out.println("  ✓ API组: " + serviceDef.apiGroup().name());
-                                        System.out.println("  ✓ 错误码范围: [" + serviceDef.apiGroup().minCode() + ", " + serviceDef.apiGroup().maxCode() + "]");
+                                        logger.info("  ✓ API组: {}", serviceDef.apiGroup().name());
+                                        logger.info("  ✓ 错误码范围: [{}, {}]", serviceDef.apiGroup().minCode(), serviceDef.apiGroup().maxCode());
                                     }
-                                    System.out.println("  ✓ 方法数: " + (serviceDef.methods() != null ? serviceDef.methods().size() : 0));
+                                    logger.info("  ✓ 方法数: {}", (serviceDef.methods() != null ? serviceDef.methods().size() : 0));
                                     if (serviceDef.entities() != null && !serviceDef.entities().isEmpty()) {
-                                        System.out.println("  ✓ 实体类型数: " + serviceDef.entities().size());
+                                        logger.info("  ✓ 实体类型数: {}", serviceDef.entities().size());
                                     }
                                     if (serviceDef.errorCodes() != null && !serviceDef.errorCodes().isEmpty()) {
                                         int totalCodes = serviceDef.errorCodes().stream()
                                             .mapToInt(ec -> ec.codes() != null ? ec.codes().size() : 0)
                                             .sum();
-                                        System.out.println("  ✓ 错误码数: " + totalCodes);
+                                        logger.info("  ✓ 错误码数: {}", totalCodes);
                                     }
                                 }
                             }
@@ -954,24 +957,23 @@ public class ApiMetadataValidator {
             }
             
             // 打印总结
-            System.out.println("\n" + "=".repeat(60));
-            System.out.println("[API-CHECK] 检查完成");
-            System.out.println("  扫描类数: " + checkedCount);
-            System.out.println("  API接口数: " + apiGroupCount);
-            System.out.println("  错误数: " + totalErrorCount);
-            System.out.println("=".repeat(60));
-            
+            logger.info("{}", "=".repeat(60));
+            logger.info("[API-CHECK] 检查完成");
+            logger.info("  扫描类数: {}", checkedCount);
+            logger.info("  API接口数: {}", apiGroupCount);
+            logger.info("  错误数: {}", totalErrorCount);
+            logger.info("{}", "=".repeat(60));
+
             // 关闭类加载器
             classLoader.close();
-            
+
             // 如果有错误，退出码非零
             if (totalErrorCount > 0) {
                 System.exit(2);
             }
-            
+
         } catch (Exception e) {
-            System.err.println("[API-CHECK] 检查失败: " + e.getMessage());
-            e.printStackTrace();
+            logger.error("[API-CHECK] 检查失败: {}", e.getMessage(), e);
             System.exit(3);
         }
     }

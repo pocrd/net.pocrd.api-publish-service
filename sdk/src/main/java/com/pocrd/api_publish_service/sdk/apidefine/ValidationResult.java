@@ -1,5 +1,8 @@
 package com.pocrd.api_publish_service.sdk.apidefine;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -7,6 +10,8 @@ import java.util.List;
  * 验证结果
  */
 public class ValidationResult {
+    private static final Logger logger = LoggerFactory.getLogger(ValidationResult.class);
+
     private final List<ValidationError> errors = new ArrayList<>();
     private ServiceDefinition serviceDefinition;
     
@@ -67,16 +72,15 @@ public class ValidationResult {
      */
     public void printErrors() {
         if (errors.isEmpty()) {
-            System.out.println("✓ 验证通过，未发现错误");
+            logger.info("✓ 验证通过，未发现错误");
             return;
         }
-        
-        System.out.println("✗ 发现 " + errors.size() + " 个错误:");
-        System.out.println();
-        
+
+        logger.error("✗ 发现 {} 个错误:", errors.size());
+
         int index = 1;
         for (ValidationError error : errors) {
-            System.out.println(index + ". " + error.format());
+            logger.error("{}. {}", index, error.format());
             index++;
         }
     }

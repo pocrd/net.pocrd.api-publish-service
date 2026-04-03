@@ -1,5 +1,12 @@
 package com.pocrd.clientsdk;
 
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Function;
+
 /**
  * JSON 工具类
  * <p>
@@ -112,7 +119,7 @@ public final class JsonUtil {
     /**
      * 解析 JSON 数组字符串为 List
      *
-     * @param json   JSON 数组字符串，如 ["a","b","c"] 或 [1,2,3]
+     * @param json   JSON 数组字符串，如 ["a","b","c"] 或 [{...},{...}]
      * @param parser 元素解析函数
      * @return 解析后的 List
      */
@@ -126,11 +133,111 @@ public final class JsonUtil {
         if (content.endsWith("]")) content = content.substring(0, content.length() - 1);
         if (content.isEmpty()) return result;
 
-        // 简单分割（注意：不支持嵌套数组或包含逗号的字符串）
-        String[] items = content.split(",");
+        // 智能分割：处理嵌套的 JSON 对象和数组
+        java.util.List<String> items = splitJsonArray(content);
         for (String item : items) {
             result.add(parser.apply(item.trim()));
         }
+        return result;
+    }
+
+    /**
+     * 从 JsonParser 直接解析 JSON 数组为 List（零拷贝方式）
+     * <p>
+     * 调用前 parser 应该已经定位到 START_ARRAY token
+     * 
+     * @param parser         JsonParser 实例
+     * @param elementParser  元素解析函数，接收 JsonParser 并返回解析后的元素
+     * @return 解析后的 List
+     */
+    public static <T> List<T> parseListFromJson(JsonParser parser, ThrowingFunction<JsonParser, T> elementParser) throws IOException {
+        List<T> result = new ArrayList<>();
+        JsonToken token = parser.currentToken();
+        if (token != JsonToken.START_ARRAY) {
+            throw new IllegalArgumentException("Expected START_ARRAY, got: " + token);
+        }
+        
+        while ((token = parser.nextToken()) != JsonToken.END_ARRAY) {
+            if (token == JsonToken.VALUE_NULL) {
+                result.add(null);
+            } else {
+                result.add(elementParser.apply(parser));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 从 JsonParser 直接解析 JSON 数组中的字符串元素
+     */
+    public static List<String> parseStringListFromJson(JsonParser parser) throws IOException {
+        List<String> result = new ArrayList<>();
+        JsonToken token = parser.currentToken();
+        if (token != JsonToken.START_ARRAY) {
+            throw new IllegalArgumentException("Expected START_ARRAY, got: " + token);
+        }
+        
+        while ((token = parser.nextToken()) != JsonToken.END_ARRAY) {
+            if (token == JsonToken.VALUE_NULL) {
+                result.add(null);
+            } else {
+                result.add(parser.getValueAsString());
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 可抛出异常的 Function 接口
+     */
+    @FunctionalInterface
+    public interface ThrowingFunction<T, R> {
+        R apply(T t) throws IOException;
+    }
+
+    /**
+     * 智能分割 JSON 数组元素，正确处理嵌套的对象和数组
+     */
+    private static java.util.List<String> splitJsonArray(String content) {
+        java.util.List<String> result = new java.util.ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        int braceDepth = 0;    // 大括号深度
+        int bracketDepth = 0;  // 中括号深度
+        boolean inString = false;
+        char prevChar = 0;
+
+        for (int i = 0; i < content.length(); i++) {
+            char c = content.charAt(i);
+
+            // 处理字符串转义
+            if (c == '"' && prevChar != '\\') {
+                inString = !inString;
+            }
+
+            if (!inString) {
+                if (c == '{') braceDepth++;
+                else if (c == '}') braceDepth--;
+                else if (c == '[') bracketDepth++;
+                else if (c == ']') bracketDepth--;
+                else if (c == ',' && braceDepth == 0 && bracketDepth == 0) {
+                    // 在顶层遇到逗号，分割元素
+                    if (current.length() > 0) {
+                        result.add(current.toString().trim());
+                        current = new StringBuilder();
+                    }
+                    continue;
+                }
+            }
+
+            current.append(c);
+            prevChar = c;
+        }
+
+        // 添加最后一个元素
+        if (current.length() > 0) {
+            result.add(current.toString().trim());
+        }
+
         return result;
     }
 }

@@ -264,6 +264,8 @@ class JavaCodeGenerator:
         self.env.filters['to_json_value'] = self.to_json_value
         self.env.filters['default_value'] = self.default_value
         self.env.filters['parse_json_value'] = self.parse_json_value
+        self.env.filters['parse_json_value_with_null'] = self.parse_json_value_with_null
+        self.env.filters['parse_from_json_token'] = self.parse_from_json_token
         # 注册模板测试：判断类型是否为实体类（含 '_'，非内置基础类型）
         self.env.tests['entity_type'] = lambda t: '_' in t and t not in self.TYPE_MAPPING
         # 注册模板测试：判断类型是否为基础类型（非对象类型）
@@ -493,7 +495,68 @@ class JavaCodeGenerator:
             return f'{class_name}.fromJson(value)'
 
         return single_parsers.get(type_str, 'null /* unsupported type */')
+
+    def parse_json_value_with_null(self, type_str: str, container_type: Optional[str] = None) -> str:
+        """生成从 JSON 字符串解析字段值的代码片段，支持 null 值检查"""
+        # 复用 parse_json_value 的逻辑，但添加 null 检查
+        parsed = self.parse_json_value(type_str, container_type)
+        
+        # 对于可能返回 null 的解析，添加 null 检查
+        if container_type:
+            # 容器类型：如果 value 是 "null" 或 null，返回空容器
+            return f'("null".equals(value) || value == null) ? {self.default_value(type_str, container_type)} : {parsed}'
+        elif '_' in type_str:
+            # 实体类型：如果 value 是 "null" 或 null，返回 null
+            return f'("null".equals(value) || value == null) ? null : {parsed}'
+        else:
+            # 基础类型：如果 value 是 "null" 或 null，返回默认值
+            return f'("null".equals(value) || value == null) ? {self.default_value(type_str)} : {parsed}'
+
+    def parse_from_json_token(self, type_str: str, container_type: Optional[str] = None) -> str:
+        """生成从 Jackson JsonToken 直接解析字段值的代码片段，零拷贝方式"""
+        
+        # 容器类型处理
+        if container_type:
+            container = container_type.lower()
+            if container in ('list', 'array'):
+                element_type = type_str
+                if '_' in element_type:
+                    # 实体类型列表
+                    class_name = self.to_class_name(element_type)
+                    return f'com.pocrd.clientsdk.JsonUtil.parseListFromJson(parser, {class_name}::parseFromJson)'
+                else:
+                    # 基础类型列表
+                    return f'com.pocrd.clientsdk.JsonUtil.parseStringListFromJson(parser)'
+            elif container == 'set':
+                element_type = type_str
+                if '_' in element_type:
+                    class_name = self.to_class_name(element_type)
+                    return f'new java.util.HashSet<>(com.pocrd.clientsdk.JsonUtil.parseListFromJson(parser, {class_name}::parseFromJson))'
+                else:
+                    return f'new java.util.HashSet<>(com.pocrd.clientsdk.JsonUtil.parseStringListFromJson(parser))'
+        
+        # 实体类型
+        if '_' in type_str:
+            class_name = self.to_class_name(type_str)
+            return f'{class_name}.parseFromJson(parser)'
+        
+        # 基础类型
+        return self._get_json_token_parser(type_str)
     
+    def _get_json_token_parser(self, type_str: str) -> str:
+        """获取基础类型从 JsonToken 解析的代码"""
+        parsers = {
+            'string': 'parser.getValueAsString()',
+            'int': 'parser.getValueAsInt()',
+            'long': 'parser.getValueAsLong()',
+            'bool': 'parser.getValueAsBoolean()',
+            'float': '(float) parser.getValueAsDouble()',
+            'double': 'parser.getValueAsDouble()',
+            'byte': '(byte) parser.getValueAsInt()',
+            'short': '(short) parser.getValueAsInt()',
+        }
+        return parsers.get(type_str, 'parser.getText()')
+
     def generate_entities(self, service_data: Dict[str, Any], package_prefix: str = None) -> List[Path]:
         """
         生成实体类

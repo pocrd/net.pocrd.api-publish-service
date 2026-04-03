@@ -17,7 +17,7 @@ import java.util.Set;
 
 {% endif %}
  */
-public final class {{ class_name }} extends ApiMethod<{{ method.returnType | to_java_type | to_wrapper_type }}> {
+public final class {{ class_name }} extends ApiMethod<{{ method.returnType | to_java_type(method.returnContainerType) | to_wrapper_type }}> {
 
     /** 方法名 */
     public static final String METHOD_NAME = "{{ method.name }}";
@@ -88,8 +88,16 @@ public final class {{ class_name }} extends ApiMethod<{{ method.returnType | to_
 
     @Override
     @SuppressWarnings("unchecked")
-    public Class<{{ method.returnType | to_java_type | to_wrapper_type }}> getReturnType() {
-        return (Class<{{ method.returnType | to_java_type | to_wrapper_type }}>) (Class<?>) {{ method.returnType | to_java_type | to_wrapper_type }}.class;
+    public Class<{{ method.returnType | to_java_type(method.returnContainerType) | to_wrapper_type }}> getReturnType() {
+        return (Class<{{ method.returnType | to_java_type(method.returnContainerType) | to_wrapper_type }}>) (Class<?>) {{ method.returnType | to_java_type | to_wrapper_type }}.class;
+    }
+
+    /**
+     * 获取返回类型的容器类型（如 list, set）
+     * @return 容器类型，如果没有则为空字符串
+     */
+    public String getReturnContainerType() {
+        return "{{ method.returnContainerType | default('') }}";
     }
 
     @Override

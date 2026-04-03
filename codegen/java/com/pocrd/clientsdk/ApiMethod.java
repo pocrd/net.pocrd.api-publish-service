@@ -28,6 +28,12 @@ public abstract class ApiMethod<R> {
     public abstract Class<R> getReturnType();
 
     /**
+     * 获取返回类型的容器类型（如 list, set）
+     * @return 容器类型，如果没有则为空字符串
+     */
+    public abstract String getReturnContainerType();
+
+    /**
      * 构建请求 URL
      *
      * @param baseUrl 基础 URL，如 https://api.example.com

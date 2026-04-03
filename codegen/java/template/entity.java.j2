@@ -63,40 +63,86 @@ public record {{ class_name }}(
     /**
      * 从 JSON 字符串反序列化为实体对象
      * <p>
-     * 简单实现：按字段顺序解析，不支持嵌套实体和复杂类型
+     * 使用 Jackson JsonParser 流式解析，零拷贝直接到字段
      */
     public static {{ class_name }} fromJson(String json) {
         if (json == null || json.isEmpty() || json.equals("null")) {
             return null;
         }
-        // 去掉首尾 {}
-        String content = json.trim();
-        if (content.startsWith("{")) content = content.substring(1);
-        if (content.endsWith("}")) content = content.substring(0, content.length() - 1);
 
+        try (com.fasterxml.jackson.core.JsonParser parser = 
+                new com.fasterxml.jackson.core.JsonFactory().createParser(json)) {
+            return parseFromJson(parser);
+        } catch (java.io.IOException e) {
+            throw new IllegalArgumentException("Failed to parse JSON: " + json, e);
+        }
+    }
+
+    /**
+     * 从 JsonParser 流式解析为实体对象
+     */
+    public static {{ class_name }} parseFromJson(com.fasterxml.jackson.core.JsonParser parser) throws java.io.IOException {
 {% for field in fields %}
         {{ field.type | to_java_type(field.containerType) }} {{ field.name }} = {{ field.type | default_value(field.containerType) }};
 {% endfor %}
 
-        // 简单解析：按逗号分割字段
-        String[] pairs = content.split(",");
-        for (String pair : pairs) {
-            int colonIdx = pair.indexOf(':');
-            if (colonIdx < 0) continue;
-            String key = pair.substring(0, colonIdx).trim().replace("\"", "");
-            String value = pair.substring(colonIdx + 1).trim();
+        com.fasterxml.jackson.core.JsonToken token = parser.currentToken();
+        // 如果当前 token 不是 START_OBJECT，尝试获取下一个 token
+        if (token != com.fasterxml.jackson.core.JsonToken.START_OBJECT) {
+            token = parser.nextToken();
+        }
+        if (token != com.fasterxml.jackson.core.JsonToken.START_OBJECT) {
+            throw new IllegalArgumentException("Expected JSON object, got: " + token);
+        }
+
+        while ((token = parser.nextToken()) != com.fasterxml.jackson.core.JsonToken.END_OBJECT) {
+            if (token != com.fasterxml.jackson.core.JsonToken.FIELD_NAME) {
+                continue;
+            }
+            String fieldName = parser.getCurrentName();
+            token = parser.nextToken();
 
 {% for field in fields %}
 {% if loop.first %}
-            if ("{{ field.name }}".equals(key)) {
+            if ("{{ field.name }}".equals(fieldName)) {
 {% else %}
-            } else if ("{{ field.name }}".equals(key)) {
+            } else if ("{{ field.name }}".equals(fieldName)) {
 {% endif %}
-                {{ field.name }} = {{ field.type | parse_json_value(field.containerType) }};
+                {{ field.name }} = {{ field.type | parse_from_json_token(field.containerType) }};
 {% endfor %}
+            } else {
+                // 跳过未知字段
+                skipValue(parser, token);
             }
         }
 
         return new {{ class_name }}({% for field in fields %}{{ field.name }}{% if not loop.last %}, {% endif %}{% endfor %});
+    }
+
+    /**
+     * 跳过当前 JSON 值（用于处理未知字段）
+     */
+    private static void skipValue(com.fasterxml.jackson.core.JsonParser parser, 
+                                   com.fasterxml.jackson.core.JsonToken token) throws java.io.IOException {
+        switch (token) {
+            case START_OBJECT:
+                while (parser.nextToken() != com.fasterxml.jackson.core.JsonToken.END_OBJECT) {
+                    if (parser.currentToken() == com.fasterxml.jackson.core.JsonToken.FIELD_NAME) {
+                        parser.nextToken();
+                        skipValue(parser, parser.currentToken());
+                    }
+                }
+                break;
+            case START_ARRAY:
+                while (parser.nextToken() != com.fasterxml.jackson.core.JsonToken.END_ARRAY) {
+                    if (parser.currentToken().isStructStart()) {
+                        skipValue(parser, parser.currentToken());
+                    }
+                }
+                break;
+            default:
+                // 标量值，无需操作
+                break;
+        }
     }
 }

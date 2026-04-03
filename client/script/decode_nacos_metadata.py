@@ -11,6 +11,7 @@ import base64
 import urllib.parse
 import urllib.request
 import os
+import argparse
 from typing import Optional, Dict, Any, List, Tuple
 
 # 默认输出文件路径
@@ -156,8 +157,12 @@ def parse_service_info(data_id: str) -> Optional[Tuple[str, str, str]]:
     
     return (interface, version, group)
 
-def show_service_metadata(nacos_url: str, data_id: str, service_interface: str, version: str, group: str) -> Optional[Dict[str, Any]]:
-    """显示指定服务的元数据，返回解码后的元数据（如果成功）"""
+def show_service_metadata(nacos_url: str, data_id: str, service_interface: str, version: str, group: str, debug: bool = False) -> Optional[Dict[str, Any]]:
+    """显示指定服务的元数据，返回解码后的元数据（如果成功）
+
+    Args:
+        debug: 是否打印解码后的元数据详情
+    """
     print(f"\n{Colors.BLUE}{'='*60}{Colors.NC}")
     print(f"{Colors.BLUE}服务：{service_interface}{Colors.NC}")
     print(f"{Colors.BLUE}版本：{version}{Colors.NC}")
@@ -184,13 +189,15 @@ def show_service_metadata(nacos_url: str, data_id: str, service_interface: str, 
         return None
 
     print(f"{Colors.YELLOW}压缩的元数据大小：{len(compressed_data)} bytes{Colors.NC}")
-    print(f"\n{Colors.GREEN}解码后的元数据：{Colors.NC}\n")
 
     # 解码并格式化输出
     metadata = decode_metadata(compressed_data)
 
     if metadata:
-        print(json.dumps(metadata, indent=2, ensure_ascii=False))
+        # 只有在 debug 模式下才打印解码后的元数据
+        if debug:
+            print(f"\n{Colors.GREEN}解码后的元数据：{Colors.NC}\n")
+            print(json.dumps(metadata, indent=2, ensure_ascii=False))
 
         # 打印摘要信息
         print(f"\n{Colors.YELLOW}摘要：{Colors.NC}")
@@ -348,8 +355,12 @@ def collect_dubbo_services_from_instances(nacos_url: str, services: List[Dict[st
     return dubbo_services
 
 
-def show_all_dubbo_metadata(nacos_url: str):
-    """遍历并显示所有 Dubbo 服务的元数据"""
+def show_all_dubbo_metadata(nacos_url: str, debug: bool = False):
+    """遍历并显示所有 Dubbo 服务的元数据
+
+    Args:
+        debug: 是否打印解码后的元数据详情
+    """
     print(f"{Colors.YELLOW}正在获取 Nacos 中所有 Dubbo 配置...{Colors.NC}\n")
     
     # 第一步：获取并打印 Nacos 服务列表
@@ -408,7 +419,7 @@ def show_all_dubbo_metadata(nacos_url: str):
         for svc in business_services:
             info = svc['dubbo_info']
             metadata = show_service_metadata(nacos_url, svc['data_id'], info['interface'],
-                                     info['version'], info['group'])
+                                     info['version'], info['group'], debug)
             if metadata:
                 success_count += 1
                 # 添加服务标识信息到元数据
@@ -451,19 +462,23 @@ def show_all_dubbo_metadata(nacos_url: str):
                 for svc in framework_services:
                     info = svc['dubbo_info']
                     show_service_metadata(nacos_url, svc['data_id'], info['interface'],
-                                         info['version'], info['group'])
+                                         info['version'], info['group'], debug)
         except EOFError:
             pass  # 非交互式环境，跳过
 
-def show_single_service(nacos_url: str, service_interface: str, version: str, group: str, api_md5: str = ''):
-    """显示单个指定服务的元数据"""
+def show_single_service(nacos_url: str, service_interface: str, version: str, group: str, api_md5: str = '', debug: bool = False):
+    """显示单个指定服务的元数据
+
+    Args:
+        debug: 是否打印解码后的元数据详情
+    """
     # 构建 dataId（Dubbo 3.3.6 格式，支持 MD5）
     if api_md5:
         version_with_md5 = f"{version}-{api_md5}"
     else:
         version_with_md5 = version
     data_id = f"{group}-{service_interface}:{version}:{version_with_md5}:{group}:provider:api-publish-service"
-    metadata = show_service_metadata(nacos_url, data_id, service_interface, version, group)
+    metadata = show_service_metadata(nacos_url, data_id, service_interface, version, group, debug)
 
     # 保存单个服务的元数据到文件
     if metadata:
@@ -481,34 +496,51 @@ def show_single_service(nacos_url: str, service_interface: str, version: str, gr
             print(f"\n{Colors.GREEN}✓ 元数据已保存到：{output_path}{Colors.NC}")
 
 def main():
-    # 解析命令行参数
-    if len(sys.argv) == 1:
-        # 无参数：遍历所有 Dubbo 服务
-        nacos_addr = "http://localhost:30848"
-        mode = "all"
-    elif len(sys.argv) == 2:
-        # 1个参数：Nacos 地址，遍历所有
-        nacos_addr = sys.argv[1]
-        mode = "all"
-    elif len(sys.argv) == 5:
-        # 4个参数：Nacos 地址 + 服务信息
-        nacos_addr = sys.argv[1]
+    # 使用 argparse 解析命令行参数
+    parser = argparse.ArgumentParser(
+        description='Nacos API 元数据获取与解码工具',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  %(prog)s                          # 遍历所有 Dubbo 服务（默认 localhost:30848）
+  %(prog)s http://nacos:8848        # 遍历所有 Dubbo 服务（指定 Nacos）
+  %(prog)s -d http://nacos:8848     # 打印解码后的元数据详情
+  %(prog)s http://nacos:8848 com.example.Service 1.0.0 public  # 获取单个服务
+  %(prog)s -d http://nacos:8848 com.example.Service 1.0.0 public  # 获取单个服务并打印详情
+        """
+    )
+    parser.add_argument('-d', '--debug', action='store_true',
+                        help='打印解码后的元数据详情（默认只打印摘要）')
+    parser.add_argument('nacos_url', nargs='?', default='http://localhost:30848',
+                        help='Nacos 地址（默认: http://localhost:30848）')
+    parser.add_argument('service_interface', nargs='?',
+                        help='服务接口全限定名（可选，用于获取单个服务）')
+    parser.add_argument('version', nargs='?',
+                        help='服务版本（可选，用于获取单个服务）')
+    parser.add_argument('group', nargs='?',
+                        help='服务分组（可选，用于获取单个服务）')
+
+    args = parser.parse_args()
+
+    # 确定运行模式
+    if args.service_interface and args.version and args.group:
         mode = "single"
-        service_interface = sys.argv[2]
-        version = sys.argv[3]
-        group = sys.argv[4]
+    elif args.service_interface or args.version or args.group:
+        parser.error("获取单个服务时需要同时指定 service_interface、version 和 group")
     else:
-        print(f"用法: {sys.argv[0]} [nacos_url] [service_interface version group]")
-        print(f"  {sys.argv[0]}                          # 遍历所有 Dubbo 服务（默认 localhost:30848）")
-        print(f"  {sys.argv[0]} http://nacos:8848        # 遍历所有 Dubbo 服务（指定 Nacos）")
-        print(f"  {sys.argv[0]} http://nacos:8848 com.example.Service 1.0.0 public  # 获取单个服务")
-        sys.exit(1)
-    
+        mode = "all"
+
+    nacos_addr = args.nacos_url
+    debug = args.debug
+
     print(f"{Colors.BLUE}{'='*60}{Colors.NC}")
     print(f"{Colors.BLUE}Nacos API 元数据获取与解码工具{Colors.NC}")
     print(f"{Colors.BLUE}{'='*60}{Colors.NC}")
-    print(f"{Colors.YELLOW}Nacos 地址：{nacos_addr}{Colors.NC}\n")
-    
+    print(f"{Colors.YELLOW}Nacos 地址：{nacos_addr}{Colors.NC}")
+    if debug:
+        print(f"{Colors.YELLOW}调试模式：已启用（将打印解码后的元数据详情）{Colors.NC}")
+    print()
+
     # 检查 Nacos 是否可访问
     try:
         urllib.request.urlopen(f"{nacos_addr}/nacos/", timeout=3)
@@ -517,13 +549,13 @@ def main():
         print(f"{Colors.RED}错误：无法连接到 Nacos ({nacos_addr}){Colors.NC}")
         print("请检查 Nacos 地址是否正确，或服务是否正在运行")
         sys.exit(1)
-    
+
     # 根据模式执行
     if mode == "all":
-        show_all_dubbo_metadata(nacos_addr)
+        show_all_dubbo_metadata(nacos_addr, debug)
     else:
-        show_single_service(nacos_addr, service_interface, version, group)
-    
+        show_single_service(nacos_addr, args.service_interface, args.version, args.group, debug=debug)
+
     print(f"\n{Colors.BLUE}{'='*60}{Colors.NC}")
     print(f"{Colors.BLUE}完成{Colors.NC}")
     print(f"{Colors.BLUE}{'='*60}{Colors.NC}")

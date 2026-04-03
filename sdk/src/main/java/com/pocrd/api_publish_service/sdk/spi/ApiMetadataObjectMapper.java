@@ -12,6 +12,8 @@ import com.pocrd.api_publish_service.sdk.apidefine.MethodDefinition;
 import com.pocrd.api_publish_service.sdk.apidefine.ParameterDefinition;
 import com.pocrd.api_publish_service.sdk.entity.EnumNull;
 import com.pocrd.api_publish_service.sdk.util.ApiMetadataValidator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -31,6 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 6. EnumNull 视为 null，展开真实枚举值
  */
 public class ApiMetadataObjectMapper {
+    private static final Logger logger = LoggerFactory.getLogger(ApiMetadataObjectMapper.class);
 
     // EnumNull 的完整类名
     private static final String ENUM_NULL_CLASS = EnumNull.class.getName();
@@ -82,7 +85,7 @@ public class ApiMetadataObjectMapper {
                         .toList();
                 }
             } catch (ClassNotFoundException e) {
-                System.err.println("[METADATA] Enum class not found: " + className);
+                logger.warn("[METADATA] Enum class not found: {}", className);
             }
             return null;
         });
