@@ -1,0 +1,98 @@
+#ifndef {{ header_guard }}_H
+#define {{ header_guard }}_H
+
+#include <stdbool.h>
+#include <stddef.h>
+#include "cjson/cJSON.h"
+#include "apg_http_method.h"
+#include "apg_list.h"
+#include "apg_set.h"
+{% for include in includes %}
+#include "{{ include }}"
+{% endfor %}
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @file {{ file_name }}.h
+ * @brief {{ method.description | default(class_name) }}
+ * 
+ * Service: {{ service_name }}
+ * Interface: {{ interface_name }}
+{% if method.errorCodes and method.errorCodes | length > 0 %}
+ * Error Codes: {% for code in method.errorCodes %}{{ code }}{% if not loop.last %}, {% endif %}{% endfor %}
+{% endif %}
+ */
+
+/* Method name constant */
+#define {{ prefix | upper }}_{{ method.name | upper }}_METHOD_NAME "{{ method.name }}"
+#define {{ prefix | upper }}_{{ method.name | upper }}_SERVICE_NAME "{{ service_name }}"
+#define {{ prefix | upper }}_{{ method.name | upper }}_INTERFACE_NAME "{{ interface_name }}"
+
+{% if method.parameters | length > 0 %}
+/* Request structure */
+typedef struct {{ class_name }}_request {
+{% for param in method.parameters %}
+    /** {{ param.desc | default(param.name) }} */
+{% if param.containerType == 'list' %}
+    {{ prefix }}_list_t *{{ param.name }};
+{% elif param.containerType == 'set' %}
+    {{ prefix }}_set_t *{{ param.name }};
+{% else %}
+    {{ param.type | to_c_type }} {{ param.name }};
+{% endif %}
+{% endfor %}
+} {{ class_name }}_request_t;
+
+/* Request lifecycle */
+{{ class_name }}_request_t* {{ class_name | to_snake_case }}_request_create(void);
+void {{ class_name | to_snake_case }}_request_destroy({{ class_name }}_request_t *req);
+cJSON* {{ class_name | to_snake_case }}_request_to_cjson(const {{ class_name }}_request_t *req);
+char* {{ class_name | to_snake_case }}_request_to_json(const {{ class_name }}_request_t *req);
+{% endif %}
+
+{% if method.returnType and method.returnType != 'void' %}
+/* Response structure */
+{% if method.returnContainerType == 'list' %}
+typedef {{ prefix }}_list_t {{ class_name }}_response_t;
+{% elif method.returnContainerType == 'set' %}
+typedef {{ prefix }}_set_t {{ class_name }}_response_t;
+{% else %}
+typedef {{ method.returnType | to_c_type }} {{ class_name }}_response_t;
+{% endif %}
+{% endif %}
+
+/* API Method configuration */
+typedef struct {{ class_name }} {
+    const char *method_name;
+    const char *service_name;
+    const char *interface_name;
+    apg_http_method_t http_method;
+    {% if method.returnType and method.returnType != 'void' %}
+    bool has_response;
+    {% else %}
+    bool has_response;
+    {% endif %}
+} {{ class_name }}_t;
+
+/* Constructor */
+{{ class_name }}_t* {{ class_name | to_snake_case }}_create(void);
+void {{ class_name | to_snake_case }}_destroy({{ class_name }}_t *api);
+
+/* Request body builder */
+{% if method.parameters | length == 0 %}
+char* {{ class_name | to_snake_case }}_build_request_body(void);
+{% else %}
+char* {{ class_name | to_snake_case }}_build_request_body(const {{ class_name }}_request_t *req);
+{% endif %}
+
+/* URL builder */
+char* {{ class_name | to_snake_case }}_build_url(const char *base_url);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* {{ header_guard }}_H */

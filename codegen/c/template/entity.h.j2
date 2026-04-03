@@ -1,0 +1,58 @@
+#ifndef {{ header_guard }}_H
+#define {{ header_guard }}_H
+
+#include <stdbool.h>
+#include <stddef.h>
+#include "cjson/cJSON.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @file {{ file_name }}.h
+ * @brief {{ description }}
+ */
+
+#include "apg_list.h"
+#include "apg_set.h"
+
+/* Forward declarations for entity types */
+{% for entity in entities %}
+typedef struct {{ entity.class_name }} {{ entity.class_name }}_t;
+{% endfor %}
+
+{% for entity in entities %}
+/* ========== {{ entity.class_name }} ========== */
+
+struct {{ entity.class_name }} {
+{% for field in entity.fields %}
+    /** {{ field.desc | default('') }} */
+{% if field.containerType == 'list' %}
+    {{ prefix }}_list_t *{{ field.name }};
+{% elif field.containerType == 'set' %}
+    {{ prefix }}_set_t *{{ field.name }};
+{% else %}
+    {{ field.type | to_c_type }} {{ field.name }};
+{% endif %}
+{% endfor %}
+};
+
+/* Constructor/Destructor */
+{{ entity.class_name }}_t* {{ entity.class_name | to_snake_case }}_create(void);
+void {{ entity.class_name | to_snake_case }}_destroy({{ entity.class_name }}_t *obj);
+{{ entity.class_name }}_t* {{ entity.class_name | to_snake_case }}_copy(const {{ entity.class_name }}_t *src);
+
+/* JSON Serialization */
+char* {{ entity.class_name | to_snake_case }}_to_json(const {{ entity.class_name }}_t *obj);
+{{ entity.class_name }}_t* {{ entity.class_name | to_snake_case }}_from_json(const char *json_str);
+{{ entity.class_name }}_t* {{ entity.class_name | to_snake_case }}_from_cjson(const cJSON *json);
+cJSON* {{ entity.class_name | to_snake_case }}_to_cjson(const {{ entity.class_name }}_t *obj);
+
+{% endfor %}
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* {{ header_guard }}_H */

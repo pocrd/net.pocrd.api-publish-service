@@ -1,0 +1,288 @@
+#include "{{ file_name }}.h"
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+
+{% if method.parameters | length > 0 %}
+/* ========== Request Implementation ========== */
+
+{{ class_name }}_request_t* {{ class_name | to_snake_case }}_request_create(void) {
+    {{ class_name }}_request_t *req = ({{ class_name }}_request_t*)calloc(1, sizeof({{ class_name }}_request_t));
+    return req;
+}
+
+void {{ class_name | to_snake_case }}_request_destroy({{ class_name }}_request_t *req) {
+    if (!req) return;
+{% for param in method.parameters %}
+{% if param.containerType == 'list' %}
+    if (req->{{ param.name }}) {
+{% if param.type is entity_type %}
+        {{ prefix }}_list_destroy(req->{{ param.name }}, (void(*)(void*)){{ param.type | entity_func_prefix }}_destroy);
+{% else %}
+        {{ prefix }}_list_destroy(req->{{ param.name }}, free);
+{% endif %}
+    }
+{% elif param.containerType == 'set' %}
+    if (req->{{ param.name }}) {
+{% if param.type is entity_type %}
+        {{ prefix }}_set_destroy(req->{{ param.name }}, (void(*)(void*)){{ param.type | entity_func_prefix }}_destroy);
+{% else %}
+        {{ prefix }}_set_destroy(req->{{ param.name }}, free);
+{% endif %}
+    }
+{% elif param.type is entity_type %}
+    if (req->{{ param.name }}) {
+        {{ param.type | entity_func_prefix }}_destroy(req->{{ param.name }});
+    }
+{% elif param.type == 'string' %}
+    free(req->{{ param.name }});
+{% endif %}
+{% endfor %}
+    free(req);
+}
+
+cJSON* {{ class_name | to_snake_case }}_request_to_cjson(const {{ class_name }}_request_t *req) {
+    if (!req) return NULL;
+    cJSON *json = cJSON_CreateObject();
+    if (!json) return NULL;
+{% for param in method.parameters %}
+{% if param.containerType == 'list' %}
+    if (req->{{ param.name }}) {
+        cJSON *{{ param.name }}_arr = cJSON_CreateArray();
+        {{ prefix }}_list_node_t *node = req->{{ param.name }}->head;
+        while (node) {
+{% if param.type is entity_type %}
+            cJSON_AddItemToArray({{ param.name }}_arr, {{ param.type | entity_func_prefix }}_to_cjson(({{ param.type | to_c_type }})node->data));
+{% elif param.type == 'string' %}
+            cJSON_AddItemToArray({{ param.name }}_arr, cJSON_CreateString((char*)node->data));
+{% elif param.type == 'bool' %}
+            cJSON_AddItemToArray({{ param.name }}_arr, cJSON_CreateBool((cJSON_bool)(int)node->data));
+{% elif param.type == 'int' %}
+            cJSON_AddItemToArray({{ param.name }}_arr, cJSON_CreateNumber((int)node->data));
+{% elif param.type == 'long' %}
+            cJSON_AddItemToArray({{ param.name }}_arr, cJSON_CreateString((char*)node->data));
+{% else %}
+            cJSON_AddItemToArray({{ param.name }}_arr, cJSON_CreateString((char*)node->data));
+{% endif %}
+            node = node->next;
+        }
+        cJSON_AddItemToObject(json, "{{ param.name }}", {{ param.name }}_arr);
+    }
+{% elif param.containerType == 'set' %}
+    if (req->{{ param.name }}) {
+        cJSON *{{ param.name }}_arr = cJSON_CreateArray();
+        {{ prefix }}_set_node_t *node = req->{{ param.name }}->head;
+        while (node) {
+{% if param.type is entity_type %}
+            cJSON_AddItemToArray({{ param.name }}_arr, {{ param.type | entity_func_prefix }}_to_cjson(({{ param.type | to_c_type }})node->data));
+{% elif param.type == 'string' %}
+            cJSON_AddItemToArray({{ param.name }}_arr, cJSON_CreateString((char*)node->data));
+{% elif param.type == 'bool' %}
+            cJSON_AddItemToArray({{ param.name }}_arr, cJSON_CreateBool((cJSON_bool)(int)node->data));
+{% elif param.type == 'int' %}
+            cJSON_AddItemToArray({{ param.name }}_arr, cJSON_CreateNumber((int)node->data));
+{% elif param.type == 'long' %}
+            cJSON_AddItemToArray({{ param.name }}_arr, cJSON_CreateString((char*)node->data));
+{% else %}
+            cJSON_AddItemToArray({{ param.name }}_arr, cJSON_CreateString((char*)node->data));
+{% endif %}
+            node = node->next;
+        }
+        cJSON_AddItemToObject(json, "{{ param.name }}", {{ param.name }}_arr);
+    }
+{% elif param.type is entity_type %}
+    if (req->{{ param.name }}) {
+        cJSON_AddItemToObject(json, "{{ param.name }}", {{ param.type | entity_func_prefix }}_to_cjson(req->{{ param.name }}));
+    }
+{% elif param.type == 'string' %}
+    if (req->{{ param.name }}) {
+        cJSON_AddStringToObject(json, "{{ param.name }}", req->{{ param.name }});
+    }
+{% elif param.type == 'bool' %}
+    cJSON_AddBoolToObject(json, "{{ param.name }}", req->{{ param.name }});
+{% else %}
+    cJSON_AddNumberToObject(json, "{{ param.name }}", req->{{ param.name }});
+{% endif %}
+{% endfor %}
+    return json;
+}
+
+char* {{ class_name | to_snake_case }}_request_to_json(const {{ class_name }}_request_t *req) {
+    if (!req) return NULL;
+    cJSON *json = {{ class_name | to_snake_case }}_request_to_cjson(req);
+    if (!json) return NULL;
+    char *str = cJSON_PrintUnformatted(json);
+    cJSON_Delete(json);
+    return str;
+}
+{% endif %}
+
+/* ========== API Method Implementation ========== */
+
+{{ class_name }}_t* {{ class_name | to_snake_case }}_create(void) {
+    {{ class_name }}_t *api = ({{ class_name }}_t*)malloc(sizeof({{ class_name }}_t));
+    if (api) {
+        api->method_name = {{ prefix | upper }}_{{ method.name | upper }}_METHOD_NAME;
+        api->service_name = {{ prefix | upper }}_{{ method.name | upper }}_SERVICE_NAME;
+        api->interface_name = {{ prefix | upper }}_{{ method.name | upper }}_INTERFACE_NAME;
+        api->http_method = {% if is_post %}APG_HTTP_POST{% else %}APG_HTTP_GET{% endif %};
+        api->has_response = {% if method.returnType and method.returnType != 'void' %}true{% else %}false{% endif %};
+    }
+    return api;
+}
+
+void {{ class_name | to_snake_case }}_destroy({{ class_name }}_t *api) {
+    free(api);
+}
+
+{% if method.parameters | length == 0 %}
+char* {{ class_name | to_snake_case }}_build_request_body(void) {
+    return strdup("");
+}
+{% else %}
+char* {{ class_name | to_snake_case }}_build_request_body(const {{ class_name }}_request_t *req) {
+    if (!req) return strdup("");
+{% if method.parameters | length == 1 %}
+    {% set param = method.parameters[0] %}
+    {% if param.containerType == 'list' %}
+    /* Single list parameter - serialize the list directly */
+    cJSON *json = cJSON_CreateArray();
+    {{ prefix }}_list_node_t *node = req->{{ param.name }}->head;
+    while (node) {
+        {% if param.type is entity_type %}
+        cJSON_AddItemToArray(json, {{ param.type | entity_func_prefix }}_to_cjson(({{ param.type | to_c_type }})node->data));
+        {% elif param.type == 'string' %}
+        cJSON_AddItemToArray(json, cJSON_CreateString((char*)node->data));
+        {% elif param.type == 'bool' %}
+        cJSON_AddItemToArray(json, cJSON_CreateBool((cJSON_bool)*(bool*)node->data));
+        {% elif param.type == 'int' %}
+        cJSON_AddItemToArray(json, cJSON_CreateNumber(*(int*)node->data));
+        {% elif param.type == 'long' %}
+        cJSON_AddItemToArray(json, cJSON_CreateString((char*)node->data));
+        {% else %}
+        cJSON_AddItemToArray(json, cJSON_CreateString((char*)node->data));
+        {% endif %}
+        node = node->next;
+    }
+    char *str = cJSON_PrintUnformatted(json);
+    cJSON_Delete(json);
+    return str;
+    {% elif param.containerType == 'set' %}
+    /* Single set parameter - serialize the set directly */
+    cJSON *json = cJSON_CreateArray();
+    {{ prefix }}_set_node_t *node = req->{{ param.name }}->head;
+    while (node) {
+         {% if param.type is entity_type %}
+        cJSON_AddItemToArray(json, {{ param.type | entity_func_prefix }}_to_cjson(({{ param.type | to_c_type }})node->data));
+        {% elif param.type == 'string' %}
+        cJSON_AddItemToArray(json, cJSON_CreateString((char*)node->data));
+        {% elif param.type == 'bool' %}
+        cJSON_AddItemToArray(json, cJSON_CreateBool((cJSON_bool)*(bool*)node->data));
+        {% elif param.type == 'int' %}
+        cJSON_AddItemToArray(json, cJSON_CreateNumber(*(int*)node->data));
+        {% elif param.type == 'long' %}
+        cJSON_AddItemToArray(json, cJSON_CreateString((char*)node->data));
+        {% else %}
+        cJSON_AddItemToArray(json, cJSON_CreateString((char*)node->data));
+        {% endif %}
+        node = node->next;
+    }
+    char *str = cJSON_PrintUnformatted(json);
+    cJSON_Delete(json);
+    return str;
+    {% elif param.type is entity_type %}
+    /* Single entity parameter - use entity's to_json */
+    return {{ param.type | entity_func_prefix }}_to_json(req->{{ param.name }});
+    {% else %}
+    /* Single primitive parameter */
+    cJSON *json = cJSON_CreateObject();
+    {% if param.type == 'string' %}
+    cJSON_AddStringToObject(json, "{{ param.name }}", req->{{ param.name }});
+    {% elif param.type == 'bool' %}
+    cJSON_AddBoolToObject(json, "{{ param.name }}", req->{{ param.name }});
+    {% else %}
+    cJSON_AddNumberToObject(json, "{{ param.name }}", req->{{ param.name }});
+    {% endif %}
+    char *str = cJSON_PrintUnformatted(json);
+    cJSON_Delete(json);
+    return str;
+    {% endif %}
+{% else %}
+    /* Multiple parameters - build JSON object */
+    cJSON *json = cJSON_CreateObject();
+{% for param in method.parameters %}
+    {% if param.containerType == 'list' %}
+    if (req->{{ param.name }}) {
+        cJSON *{{ param.name }}_arr = cJSON_CreateArray();
+        {{ prefix }}_list_node_t *node = req->{{ param.name }}->head;
+        while (node) {
+            {% if param.type is entity_type %}
+            cJSON_AddItemToArray(json, {{ param.type | entity_func_prefix }}_to_cjson(({{ param.type | to_c_type }})node->data));
+            {% elif param.type == 'string' %}
+            cJSON_AddItemToArray(json, cJSON_CreateString((char*)node->data));
+            {% elif param.type == 'bool' %}
+            cJSON_AddItemToArray(json, cJSON_CreateBool((cJSON_bool)*(bool*)node->data));
+            {% elif param.type == 'int' %}
+            cJSON_AddItemToArray(json, cJSON_CreateNumber(*(int*)node->data));
+            {% elif param.type == 'long' %}
+            cJSON_AddItemToArray(json, cJSON_CreateString((char*)node->data));
+            {% else %}
+            cJSON_AddItemToArray(json, cJSON_CreateString((char*)node->data));
+            {% endif %}
+            node = node->next;
+        }
+        cJSON_AddItemToObject(json, "{{ param.name }}", {{ param.name }}_arr);
+    }
+    {% elif param.containerType == 'set' %}
+    if (req->{{ param.name }}) {
+        cJSON *{{ param.name }}_arr = cJSON_CreateArray();
+        {{ prefix }}_set_node_t *node = req->{{ param.name }}->head;
+        while (node) {
+            {% if param.type is entity_type %}
+            cJSON_AddItemToArray(json, {{ param.type | entity_func_prefix }}_to_cjson(({{ param.type | to_c_type }})node->data));
+            {% elif param.type == 'string' %}
+            cJSON_AddItemToArray(json, cJSON_CreateString((char*)node->data));
+            {% elif param.type == 'bool' %}
+            cJSON_AddItemToArray(json, cJSON_CreateBool((cJSON_bool)*(bool*)node->data));
+            {% elif param.type == 'int' %}
+            cJSON_AddItemToArray(json, cJSON_CreateNumber(*(int*)node->data));
+            {% elif param.type == 'long' %}
+            cJSON_AddItemToArray(json, cJSON_CreateString((char*)node->data));
+            {% else %}
+            cJSON_AddItemToArray(json, cJSON_CreateString((char*)node->data));
+            {% endif %}
+            node = node->next;
+        }
+        cJSON_AddItemToObject(json, "{{ param.name }}", {{ param.name }}_arr);
+    }
+    {% elif param.type is entity_type %}
+    if (req->{{ param.name }}) {
+        cJSON_AddItemToObject(json, "{{ param.name }}", {{ param.type | entity_func_prefix }}_to_cjson(req->{{ param.name }}));
+    }
+    {% elif param.type == 'string' %}
+    if (req->{{ param.name }}) {
+        cJSON_AddStringToObject(json, "{{ param.name }}", req->{{ param.name }});
+    }
+    {% elif param.type == 'bool' %}
+    cJSON_AddBoolToObject(json, "{{ param.name }}", req->{{ param.name }});
+    {% else %}
+    cJSON_AddNumberToObject(json, "{{ param.name }}", req->{{ param.name }});
+    {% endif %}
+{% endfor %}
+    char *str = cJSON_PrintUnformatted(json);
+    cJSON_Delete(json);
+    return str;
+{% endif %}
+}
+{% endif %}
+
+char* {{ class_name | to_snake_case }}_build_url(const char *base_url) {
+    if (!base_url) return NULL;
+    /* Build URL: base_url/dapi/interface/method */
+    size_t len = strlen(base_url) + strlen("/dapi/{{ interface_name }}/{{ method.name }}") + 1;
+    char *url = (char*)malloc(len);
+    if (url) {
+        snprintf(url, len, "%s/dapi/{{ interface_name }}/{{ method.name }}", base_url);
+    }
+    return url;
+}

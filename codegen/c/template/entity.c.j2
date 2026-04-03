@@ -1,0 +1,240 @@
+#include "{{ file_name }}.h"
+#include <stdlib.h>
+#include <string.h>
+
+{% for entity in entities %}
+/* ========== {{ entity.class_name }} Implementation ========== */
+
+{{ entity.class_name }}_t* {{ entity.class_name | to_snake_case }}_create(void) {
+    {{ entity.class_name }}_t *obj = ({{ entity.class_name }}_t*)calloc(1, sizeof({{ entity.class_name }}_t));
+    return obj;
+}
+
+void {{ entity.class_name | to_snake_case }}_destroy({{ entity.class_name }}_t *obj) {
+    if (!obj) return;
+{% for field in entity.fields %}
+{% if field.containerType == 'list' %}
+    if (obj->{{ field.name }}) {
+{% if field.type is entity_type %}
+        {{ prefix }}_list_destroy(obj->{{ field.name }}, (void(*)(void*)){{ field.type | entity_func_prefix }}_destroy);
+{% else %}
+        {{ prefix }}_list_destroy(obj->{{ field.name }}, free);
+{% endif %}
+    }
+{% elif field.containerType == 'set' %}
+    if (obj->{{ field.name }}) {
+{% if field.type is entity_type %}
+        {{ prefix }}_set_destroy(obj->{{ field.name }}, (void(*)(void*)){{ field.type | entity_func_prefix }}_destroy);
+{% else %}
+        {{ prefix }}_set_destroy(obj->{{ field.name }}, free);
+{% endif %}
+    }
+{% elif field.type is entity_type %}
+    if (obj->{{ field.name }}) {
+        {{ field.type | entity_func_prefix }}_destroy(obj->{{ field.name }});
+    }
+{% elif field.type == 'string' %}
+    free(obj->{{ field.name }});
+{% endif %}
+{% endfor %}
+    free(obj);
+}
+
+{{ entity.class_name }}_t* {{ entity.class_name | to_snake_case }}_copy(const {{ entity.class_name }}_t *src) {
+    if (!src) return NULL;
+    {{ entity.class_name }}_t *dst = {{ entity.class_name | to_snake_case }}_create();
+    if (!dst) return NULL;
+{% for field in entity.fields %}
+{% if field.containerType == 'list' %}
+    if (src->{{ field.name }}) {
+        dst->{{ field.name }} = {{ prefix }}_list_create();
+        {{ prefix }}_list_node_t *node = src->{{ field.name }}->head;
+        while (node) {
+{% if field.type is entity_type %}
+            {{ field.type | to_c_type }} item = {{ field.type | entity_func_prefix }}_copy(({{ field.type | to_c_type }})node->data);
+            {{ prefix }}_list_append(dst->{{ field.name }}, item);
+{% else %}
+            char *item = strdup((char*)node->data);
+            {{ prefix }}_list_append(dst->{{ field.name }}, item);
+{% endif %}
+            node = node->next;
+        }
+    }
+{% elif field.containerType == 'set' %}
+    if (src->{{ field.name }}) {
+        dst->{{ field.name }} = {{ prefix }}_set_create();
+        {{ prefix }}_set_node_t *node = src->{{ field.name }}->head;
+        while (node) {
+{% if field.type is entity_type %}
+            {{ field.type | to_c_type }} item = {{ field.type | entity_func_prefix }}_copy(({{ field.type | to_c_type }})node->data);
+            {{ prefix }}_set_add(dst->{{ field.name }}, item, NULL);
+{% else %}
+            char *item = strdup((char*)node->data);
+            {{ prefix }}_set_add(dst->{{ field.name }}, item, {{ prefix }}_set_cmp_str);
+{% endif %}
+            node = node->next;
+        }
+    }
+{% elif field.type is entity_type %}
+    if (src->{{ field.name }}) {
+        dst->{{ field.name }} = {{ field.type | entity_func_prefix }}_copy(src->{{ field.name }});
+    }
+{% elif field.type == 'string' %}
+    if (src->{{ field.name }}) {
+        dst->{{ field.name }} = strdup(src->{{ field.name }});
+    }
+{% else %}
+    dst->{{ field.name }} = src->{{ field.name }};
+{% endif %}
+{% endfor %}
+    return dst;
+}
+
+/* JSON Serialization */
+cJSON* {{ entity.class_name | to_snake_case }}_to_cjson(const {{ entity.class_name }}_t *obj) {
+    if (!obj) return NULL;
+    cJSON *json = cJSON_CreateObject();
+    if (!json) return NULL;
+{% for field in entity.fields %}
+{% if field.containerType == 'list' %}
+    if (obj->{{ field.name }}) {
+        cJSON *{{ field.name }}_arr = cJSON_CreateArray();
+        {{ prefix }}_list_node_t *node = obj->{{ field.name }}->head;
+        while (node) {
+{% if field.type is entity_type %}
+            cJSON_AddItemToArray({{ field.name }}_arr, {{ field.type | entity_func_prefix }}_to_cjson(({{ field.type | to_c_type }})node->data));
+{% else %}
+            cJSON_AddItemToArray({{ field.name }}_arr, cJSON_CreateString((char*)node->data));
+{% endif %}
+            node = node->next;
+        }
+        cJSON_AddItemToObject(json, "{{ field.name }}", {{ field.name }}_arr);
+    }
+{% elif field.containerType == 'set' %}
+    if (obj->{{ field.name }}) {
+        cJSON *{{ field.name }}_arr = cJSON_CreateArray();
+        {{ prefix }}_set_node_t *node = obj->{{ field.name }}->head;
+        while (node) {
+{% if field.type is entity_type %}
+            cJSON_AddItemToArray({{ field.name }}_arr, {{ field.type | entity_func_prefix }}_to_cjson(({{ field.type | to_c_type }})node->data));
+{% else %}
+            cJSON_AddItemToArray({{ field.name }}_arr, cJSON_CreateString((char*)node->data));
+{% endif %}
+            node = node->next;
+        }
+        cJSON_AddItemToObject(json, "{{ field.name }}", {{ field.name }}_arr);
+    }
+{% elif field.type is entity_type %}
+    if (obj->{{ field.name }}) {
+        cJSON_AddItemToObject(json, "{{ field.name }}", {{ field.type | entity_func_prefix }}_to_cjson(obj->{{ field.name }}));
+    }
+{% elif field.type == 'string' %}
+    if (obj->{{ field.name }}) {
+        cJSON_AddStringToObject(json, "{{ field.name }}", obj->{{ field.name }});
+    }
+{% elif field.type == 'bool' %}
+    cJSON_AddBoolToObject(json, "{{ field.name }}", obj->{{ field.name }});
+{% else %}
+    cJSON_AddNumberToObject(json, "{{ field.name }}", obj->{{ field.name }});
+{% endif %}
+{% endfor %}
+    return json;
+}
+
+char* {{ entity.class_name | to_snake_case }}_to_json(const {{ entity.class_name }}_t *obj) {
+    if (!obj) return NULL;
+    cJSON *json = {{ entity.class_name | to_snake_case }}_to_cjson(obj);
+    if (!json) return NULL;
+    char *str = cJSON_PrintUnformatted(json);
+    cJSON_Delete(json);
+    return str;
+}
+
+{{ entity.class_name }}_t* {{ entity.class_name | to_snake_case }}_from_cjson(const cJSON *json) {
+    if (!json) return NULL;
+    {{ entity.class_name }}_t *obj = {{ entity.class_name | to_snake_case }}_create();
+    if (!obj) return NULL;
+{% for field in entity.fields %}
+{% if field.containerType == 'list' %}
+    {
+        const cJSON *{{ field.name }}_arr = cJSON_GetObjectItemCaseSensitive(json, "{{ field.name }}");
+        if (cJSON_IsArray({{ field.name }}_arr)) {
+            obj->{{ field.name }} = {{ prefix }}_list_create();
+            const cJSON *item = NULL;
+            cJSON_ArrayForEach(item, {{ field.name }}_arr) {
+{% if field.type is entity_type %}
+                {{ field.type | to_c_type }} list_item = {{ field.type | entity_func_prefix }}_from_cjson(item);
+                if (list_item) {
+                    {{ prefix }}_list_append(obj->{{ field.name }}, list_item);
+                }
+{% else %}
+                if (cJSON_IsString(item)) {
+                    {{ prefix }}_list_append(obj->{{ field.name }}, strdup(item->valuestring));
+                }
+{% endif %}
+            }
+        }
+    }
+{% elif field.containerType == 'set' %}
+    {
+        const cJSON *{{ field.name }}_arr = cJSON_GetObjectItemCaseSensitive(json, "{{ field.name }}");
+        if (cJSON_IsArray({{ field.name }}_arr)) {
+            obj->{{ field.name }} = {{ prefix }}_set_create();
+            const cJSON *item = NULL;
+            cJSON_ArrayForEach(item, {{ field.name }}_arr) {
+{% if field.type is entity_type %}
+                {{ field.type | to_c_type }} set_item = {{ field.type | entity_func_prefix }}_from_cjson(item);
+                if (set_item) {
+                    {{ prefix }}_set_add(obj->{{ field.name }}, set_item, NULL);
+                }
+{% else %}
+                if (cJSON_IsString(item)) {
+                    {{ prefix }}_set_add(obj->{{ field.name }}, strdup(item->valuestring), {{ prefix }}_set_cmp_str);
+                }
+{% endif %}
+            }
+        }
+    }
+{% elif field.type is entity_type %}
+    {
+        const cJSON *{{ field.name }}_json = cJSON_GetObjectItemCaseSensitive(json, "{{ field.name }}");
+        if ({{ field.name }}_json) {
+            obj->{{ field.name }} = {{ field.type | entity_func_prefix }}_from_cjson({{ field.name }}_json);
+        }
+    }
+{% elif field.type == 'string' %}
+    {
+        const cJSON *{{ field.name }}_json = cJSON_GetObjectItemCaseSensitive(json, "{{ field.name }}");
+        if (cJSON_IsString({{ field.name }}_json)) {
+            obj->{{ field.name }} = strdup({{ field.name }}_json->valuestring);
+        }
+    }
+{% elif field.type == 'bool' %}
+    {
+        const cJSON *{{ field.name }}_json = cJSON_GetObjectItemCaseSensitive(json, "{{ field.name }}");
+        if (cJSON_IsBool({{ field.name }}_json)) {
+            obj->{{ field.name }} = cJSON_IsTrue({{ field.name }}_json);
+        }
+    }
+{% else %}
+    {
+        const cJSON *{{ field.name }}_json = cJSON_GetObjectItemCaseSensitive(json, "{{ field.name }}");
+        if (cJSON_IsNumber({{ field.name }}_json)) {
+            obj->{{ field.name }} = ({{ field.type | to_c_type }}){{ field.name }}_json->valuedouble;
+        }
+    }
+{% endif %}
+{% endfor %}
+    return obj;
+}
+
+{{ entity.class_name }}_t* {{ entity.class_name | to_snake_case }}_from_json(const char *json_str) {
+    if (!json_str) return NULL;
+    cJSON *json = cJSON_Parse(json_str);
+    if (!json) return NULL;
+    {{ entity.class_name }}_t *obj = {{ entity.class_name | to_snake_case }}_from_cjson(json);
+    cJSON_Delete(json);
+    return obj;
+}
+
+{% endfor %}

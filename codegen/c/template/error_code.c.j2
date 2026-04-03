@@ -1,0 +1,44 @@
+#include "{{ file_name }}.h"
+#include <string.h>
+
+{% for group_name, group_codes in groups.items() %}
+/* {{ group_name }} */
+{% for code in group_codes %}
+static const {{ prefix }}_return_code_t {{ code.name }}_DEF = {{ code.name }};
+{% endfor %}
+{% endfor %}
+
+static const {{ prefix }}_return_code_t* {{ prefix }}_return_code_table[] = {
+{% for group_name, group_codes in groups.items() %}
+{% for code in group_codes %}
+    &{{ code.name }}_DEF,
+{% endfor %}
+{% endfor %}
+    NULL
+};
+
+const char* {{ prefix }}_return_code_name(int code) {
+    for (int i = 0; {{ prefix }}_return_code_table[i] != NULL; i++) {
+        if ({{ prefix }}_return_code_table[i]->code == code) {
+            return {{ prefix }}_return_code_table[i]->name;
+        }
+    }
+    return "UNKNOWN";
+}
+
+const char* {{ prefix }}_return_code_message(int code) {
+    for (int i = 0; {{ prefix }}_return_code_table[i] != NULL; i++) {
+        if ({{ prefix }}_return_code_table[i]->code == code) {
+            return {{ prefix }}_return_code_table[i]->message;
+        }
+    }
+    return "Unknown error code";
+}
+
+bool {{ prefix }}_return_code_is_success(int code) {
+    return code == 0;
+}
+
+bool {{ prefix }}_return_code_is_error(int code) {
+    return code != 0;
+}

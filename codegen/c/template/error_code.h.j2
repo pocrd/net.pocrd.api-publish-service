@@ -1,0 +1,43 @@
+#ifndef {{ header_guard }}_H
+#define {{ header_guard }}_H
+
+#include <stdbool.h>
+#include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @file {{ file_name }}.h
+ * @brief Service Return Code Definitions
+ * 
+ * Range: {{ min_code }} - {{ max_code }}
+ */
+
+/* Error code structure */
+typedef struct {
+    int code;
+    const char *name;
+    const char *message;
+} {{ prefix }}_return_code_t;
+
+{% for group_name, group_codes in groups.items() %}
+/* ========== {{ group_name }} ========== */
+{% for code in group_codes %}
+/** {{ code.desc }} */
+#define {{ code.name }} (({{ prefix }}_return_code_t){.code={{ code.code }}, .name="{{ code.name }}", .message="{{ code.desc | escape_c_string }}"})
+{% endfor %}
+
+{% endfor %}
+/* Helper functions */
+const char* {{ prefix }}_return_code_name(int code);
+const char* {{ prefix }}_return_code_message(int code);
+bool {{ prefix }}_return_code_is_success(int code);
+bool {{ prefix }}_return_code_is_error(int code);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* {{ header_guard }}_H */

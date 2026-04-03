@@ -36,8 +36,8 @@ application-local.properties
 
 .DS_Store
 __pycache__
-codegen/java/com/pocrd/clientsdk/autogen/*
-
+**/autogen/
+**/build/
 .vscode/
 datasets/
 .cursorrules
