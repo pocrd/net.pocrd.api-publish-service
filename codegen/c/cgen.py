@@ -767,7 +767,7 @@ def main():
                     all_services_data['services'].extend(metadata['services'])
             
             # 保存到共享元数据目录（codegen 目录）
-            script_dir = Path(__file__).parent
+            script_dir = Path(__file__).parent.parent
             temp_json = script_dir / 'nacos_metadata.json'
             temp_json.parent.mkdir(parents=True, exist_ok=True)
             with open(temp_json, 'w', encoding='utf-8') as f:
